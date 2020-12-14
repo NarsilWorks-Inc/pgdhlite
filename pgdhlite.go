@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strconv"
 
-	dhl "zagada/pkg/datahelperlite"
+	dhl "github.com/NarsilWorks-Inc/datahelperlite"
 
 	cfg "github.com/eaglebush/config"
 	std "github.com/eaglebush/stdutil"
