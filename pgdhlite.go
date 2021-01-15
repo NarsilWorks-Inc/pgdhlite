@@ -261,7 +261,7 @@ func (h *PostgreSQLHelper) Exec(sql string, args ...interface{}) (int64, error) 
 }
 
 // VerifyWithin a set of validation expression against the underlying database table
-func (h *PostgreSQLHelper) VerifyWithin(tablename string, values []std.ValidationExpression) (Valid bool, QueryOK bool, Message string) {
+func (h *PostgreSQLHelper) VerifyWithin(tablename string, values []std.VerifyExpression) (Valid bool, QueryOK bool, Message string) {
 	tableNameWithParameters := tablename
 
 	args := make([]interface{}, len(values))
