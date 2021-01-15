@@ -284,6 +284,10 @@ func (h *PostgreSQLHelper) VerifyWithin(tablename string, values []std.VerifyExp
 			v.Operator = "="
 		}
 
+		if v.Value == nil {
+			v.Operator = " IS "
+		}
+
 		tableNameWithParameters += andstr + v.Name + v.Operator + placeholder
 		args[i] = v.Value
 		i++
