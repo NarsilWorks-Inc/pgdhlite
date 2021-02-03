@@ -202,6 +202,8 @@ func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, err
 		err error
 	)
 
+	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
+
 	if h.tx != nil {
 		h.rws, err = h.tx.Query(h.ctx, sql, args...)
 
@@ -219,6 +221,8 @@ func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, err
 
 // QueryRow from PostgreSQL helper
 func (h *PostgreSQLHelper) QueryRow(sql string, args ...interface{}) dhl.Row {
+
+	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
 
 	if h.tx != nil {
 		rw := h.tx.QueryRow(h.ctx, sql, args...)
