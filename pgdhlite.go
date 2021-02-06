@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"strings"
 
 	dhl "github.com/NarsilWorks-Inc/datahelperlite"
 
@@ -202,6 +203,10 @@ func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, err
 		err error
 	)
 
+	// replace question mark (?) parameter with configured query parameter, if there are any
+	sql = dhl.ReplaceQueryParamMarker(sql, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
+
+	// replace tables meant for interpolation {table} for putting the schema
 	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
 
 	if h.tx != nil {
@@ -221,6 +226,9 @@ func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, err
 
 // QueryRow from PostgreSQL helper
 func (h *PostgreSQLHelper) QueryRow(sql string, args ...interface{}) dhl.Row {
+
+	// replace question mark (?) parameter with configured query parameter, if there are any
+	sql = dhl.ReplaceQueryParamMarker(sql, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
 
 	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
 
@@ -242,6 +250,11 @@ func (h *PostgreSQLHelper) Exec(sql string, args ...interface{}) (int64, error) 
 		err error
 		ct  pgconn.CommandTag
 	)
+
+	// replace question mark (?) parameter with configured query parameter, if there are any
+	sql = dhl.ReplaceQueryParamMarker(sql, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
+
+	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
 
 	if h.tx != nil {
 
@@ -313,4 +326,25 @@ func (h *PostgreSQLHelper) VerifyWithin(tablename string, values []std.VerifyExp
 	}
 
 	return exists, true, ""
+}
+
+// Escape a field value (fv) from disruption by single quote
+func (h *PostgreSQLHelper) Escape(fv string) string {
+
+	if len(fv) == 0 {
+		return ""
+	}
+
+	senc := h.dbi.StringEnclosingChar
+	sesc := h.dbi.StringEscapeChar
+
+	if len(senc) == 0 {
+		senc = `'`
+	}
+
+	if len(sesc) == 0 {
+		sesc = `'`
+	}
+
+	return strings.ReplaceAll(fv, senc, sesc+sesc)
 }
