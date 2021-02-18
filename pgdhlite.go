@@ -21,6 +21,7 @@ type PostgreSQLHelper struct {
 	ctx    context.Context
 	tx     pgx.Tx
 	rws    dhl.Rows
+	rw     dhl.Row
 	trcnt  int
 	reused bool
 }
@@ -201,6 +202,7 @@ func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, err
 
 	var (
 		err error
+		sqr pgx.Rows
 	)
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
@@ -210,22 +212,28 @@ func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, err
 	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
 
 	if h.tx != nil {
-		h.rws, err = h.tx.Query(h.ctx, sql, args...)
-
-		if err == nil {
-			return h.rws, err
-		}
-
-		if err != pgx.ErrTxClosed {
-			return h.rws, err
-		}
+		sqr, err = h.tx.Query(h.ctx, sql, args...)
+	} else {
+		sqr, err = h.con.Query(h.ctx, sql, args...)
 	}
 
-	return h.con.Query(h.ctx, sql, args...)
+	if err != nil {
+		return h.rws, err
+	}
+
+	if sqr != nil {
+		h.rws = NewPostgreSQLRows(&sqr)
+	}
+
+	return h.rws, nil
 }
 
 // QueryRow from PostgreSQL helper
 func (h *PostgreSQLHelper) QueryRow(sql string, args ...interface{}) dhl.Row {
+
+	var (
+		sqr pgx.Row
+	)
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	sql = dhl.ReplaceQueryParamMarker(sql, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
@@ -233,14 +241,16 @@ func (h *PostgreSQLHelper) QueryRow(sql string, args ...interface{}) dhl.Row {
 	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
 
 	if h.tx != nil {
-		rw := h.tx.QueryRow(h.ctx, sql, args...)
-
-		if rw != nil {
-			return rw
-		}
+		sqr = h.tx.QueryRow(h.ctx, sql, args...)
+	} else {
+		sqr = h.con.QueryRow(h.ctx, sql, args...)
 	}
 
-	return h.con.QueryRow(h.ctx, sql, args...)
+	if sqr != nil {
+		h.rw = NewPostgreSQLRow(sqr)
+	}
+
+	return h.rw
 }
 
 // Exec from PostgreSQL helper
