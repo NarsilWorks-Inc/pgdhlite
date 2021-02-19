@@ -44,7 +44,6 @@ func (h *PostgreSQLHelper) Open(ctx context.Context, di *cfg.DatabaseInfo) error
 
 	h.dbi = di
 	h.ctx = ctx
-	h.reused = true
 
 	if h.con == nil || h.con.IsClosed() {
 		h.con, err = pgx.Connect(ctx, di.ConnectionString)
@@ -52,6 +51,8 @@ func (h *PostgreSQLHelper) Open(ctx context.Context, di *cfg.DatabaseInfo) error
 			return err
 		}
 		h.reused = false
+	} else {
+		h.reused = true
 	}
 
 	return nil
@@ -64,7 +65,15 @@ func (h *PostgreSQLHelper) Close() error {
 		return errors.New(`No connection of the object was initialized`)
 	}
 
+	// if reused, closing will be prevented
 	if h.reused {
+		return nil
+	}
+
+	// if transaction count (number of begin transaction) is greater than 1,
+	// the current function's connection is derived from a parent connection
+	// and with this, we will not allow this connection to close
+	if h.trcnt > 1 {
 		return nil
 	}
 
@@ -73,7 +82,6 @@ func (h *PostgreSQLHelper) Close() error {
 	}
 
 	h.trcnt = 0
-	h.reused = false
 
 	return nil
 }
@@ -94,8 +102,9 @@ func (h *PostgreSQLHelper) Begin() error {
 		if err != nil {
 			return err
 		}
-		h.trcnt++
 	}
+
+	h.trcnt++ // count begin transactions
 
 	return nil
 }
@@ -112,8 +121,11 @@ func (h *PostgreSQLHelper) Commit() error {
 		return errors.New(`No transaction was initialized`)
 	}
 
-	if err := h.tx.Commit(h.ctx); err != nil {
-		return err
+	// when we get to the remaining transaction, we can commit
+	if h.trcnt == 1 {
+		if err := h.tx.Commit(h.ctx); err != nil {
+			return err
+		}
 	}
 
 	// decrement transaction
@@ -141,8 +153,10 @@ func (h *PostgreSQLHelper) Rollback() error {
 		return errors.New(`No transaction was initialized`)
 	}
 
-	if err := h.tx.Rollback(h.ctx); err != nil {
-		return err
+	if h.trcnt == 1 {
+		if err := h.tx.Rollback(h.ctx); err != nil {
+			return err
+		}
 	}
 
 	// decrement transaction
@@ -167,7 +181,10 @@ func (h *PostgreSQLHelper) Mark(name string) error {
 		return errors.New(`No transaction was initialized`)
 	}
 
-	_, err = h.tx.Exec(h.ctx, `SAVEPOINT sp_`+name+`;`)
+	// We can only mark if there was a begin
+	if h.trcnt > 0 {
+		_, err = h.tx.Exec(h.ctx, `SAVEPOINT sp_`+name+`;`)
+	}
 
 	return err
 }
@@ -180,7 +197,9 @@ func (h *PostgreSQLHelper) Discard(name string) error {
 		return errors.New(`No transaction was initialized`)
 	}
 
-	_, err = h.tx.Exec(h.ctx, `ROLLBACK TO SAVEPOINT sp_`+name+`;`)
+	if h.trcnt > 0 {
+		_, err = h.tx.Exec(h.ctx, `ROLLBACK TO SAVEPOINT sp_`+name+`;`)
+	}
 
 	return err
 }
@@ -193,7 +212,9 @@ func (h *PostgreSQLHelper) Save(name string) error {
 		return errors.New(`No transaction was initialized`)
 	}
 
-	_, err = h.tx.Exec(h.ctx, `RELEASE SAVEPOINT sp_`+name+`;`)
+	if h.trcnt > 0 {
+		_, err = h.tx.Exec(h.ctx, `RELEASE SAVEPOINT sp_`+name+`;`)
+	}
 
 	return err
 }
