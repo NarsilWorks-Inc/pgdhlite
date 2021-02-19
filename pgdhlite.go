@@ -69,7 +69,7 @@ func (h *PostgreSQLHelper) Close() error {
 	// if transaction count (number of begin transaction) is greater than 1,
 	// the current function's connection is derived from a parent connection
 	// and with this, we will not allow this connection to close
-	if h.reused && h.trcnt > 1 {
+	if h.reused && h.trcnt > 0 {
 		return nil
 	}
 
@@ -82,6 +82,7 @@ func (h *PostgreSQLHelper) Close() error {
 	}
 
 	h.trcnt = 0
+	h.reused = false
 
 	return nil
 }
