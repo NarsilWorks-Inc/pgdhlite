@@ -13,63 +13,76 @@ func copyScannedToDest(dest, src []interface{}) error {
 	for i, d := range src {
 		switch x := d.(type) {
 		case *sql.NullString:
-			switch s := dest[i].(type) {
-			case *string:
-				*s = x.String
-			case **string:
-				*s = &x.String
-			default:
-				return errors.New(`Unhandled sql.NullString type`)
+			if x.Valid {
+				switch s := dest[i].(type) {
+				case *string:
+					*s = x.String
+				case **string:
+					*s = &x.String
+				default:
+					return errors.New(`Unhandled sql.NullString type`)
+				}
 			}
+
 		case *sql.NullInt32:
-			switch s := dest[i].(type) {
-			case *int32:
-				*s = x.Int32
-			case **int32:
-				*s = &x.Int32
-			case *int:
-				*s = int(x.Int32)
-			case **int:
-				ic := int(x.Int32)
-				*s = &ic
-			default:
-				return errors.New(`Unhandled sql.NullInt32 type`)
+			if x.Valid {
+				switch s := dest[i].(type) {
+				case *int32:
+					*s = x.Int32
+				case **int32:
+					*s = &x.Int32
+				case *int:
+					*s = int(x.Int32)
+				case **int:
+					ic := int(x.Int32)
+					*s = &ic
+				default:
+					return errors.New(`Unhandled sql.NullInt32 type`)
+				}
 			}
 		case *sql.NullInt64:
-			switch s := dest[i].(type) {
-			case *int64:
-				*s = x.Int64
-			case **int64:
-				*s = &x.Int64
-			default:
-				return errors.New(`Unhandled sql.NullInt64 type`)
+			if x.Valid {
+				switch s := dest[i].(type) {
+				case *int64:
+					*s = x.Int64
+				case **int64:
+					*s = &x.Int64
+				default:
+					return errors.New(`Unhandled sql.NullInt64 type`)
+				}
 			}
 		case *sql.NullFloat64:
-			switch s := dest[i].(type) {
-			case *float64:
-				*s = x.Float64
-			case **float64:
-				*s = &x.Float64
-			default:
-				return errors.New(`Unhandled sql.NullFloat64 type`)
+			if x.Valid {
+				switch s := dest[i].(type) {
+				case *float64:
+					*s = x.Float64
+				case **float64:
+					*s = &x.Float64
+				default:
+					return errors.New(`Unhandled sql.NullFloat64 type`)
+				}
 			}
 		case *sql.NullBool:
-			switch s := dest[i].(type) {
-			case *bool:
-				*s = x.Bool
-			case **bool:
-				*s = &x.Bool
-			default:
-				return errors.New(`Unhandled sql.NullBool type`)
+			if x.Valid {
+				switch s := dest[i].(type) {
+				case *bool:
+					*s = x.Bool
+				case **bool:
+					*s = &x.Bool
+				default:
+					return errors.New(`Unhandled sql.NullBool type`)
+				}
 			}
 		case *sql.NullTime:
-			switch s := dest[i].(type) {
-			case *time.Time:
-				*s = x.Time
-			case **time.Time:
-				*s = &x.Time
-			default:
-				return errors.New(`Unhandled sql.NullTime type`)
+			if x.Valid {
+				switch s := dest[i].(type) {
+				case *time.Time:
+					*s = x.Time
+				case **time.Time:
+					*s = &x.Time
+				default:
+					return errors.New(`Unhandled sql.NullTime type`)
+				}
 			}
 		default:
 			return errors.New(`Unhandled sql.Null<type>`)
