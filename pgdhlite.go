@@ -114,6 +114,7 @@ func (h *PostgreSQLHelper) Commit() error {
 
 	// exit if the connection was just reused and transaction is still greater than 1
 	if h.reused && h.trcnt > 1 {
+		h.trcnt-- // deduct from transaction count
 		return nil
 	}
 
@@ -146,6 +147,7 @@ func (h *PostgreSQLHelper) Rollback() error {
 
 	// exit if the connection was just reused
 	if h.reused && h.trcnt > 1 {
+		h.trcnt-- // deduct from transaction count
 		return nil
 	}
 
