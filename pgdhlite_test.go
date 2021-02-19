@@ -311,3 +311,43 @@ func TestWriteTransactions(t *testing.T) {
 	c.Commit()
 
 }
+
+func TestSequence(t *testing.T) {
+	var (
+		err error
+		//affr int64
+		c dhl.DataHelperLite
+	)
+
+	c, err = dhl.New(nil, `pgdhlite`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	cf, err := cfg.LoadConfig(`config.json`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	if err = c.Open(context.Background(), cf.GetDatabaseInfo(`DEFAULT`)); err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+	defer c.Close()
+
+	var seq int64
+
+	err = c.Next(`testsequence`, &seq)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	t.Logf("Sequence for testsequence: %d", seq)
+}

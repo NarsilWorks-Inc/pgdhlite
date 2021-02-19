@@ -3,6 +3,7 @@ package pgdhlite
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -287,6 +288,35 @@ func (h *PostgreSQLHelper) Exec(sql string, args ...interface{}) (int64, error) 
 	return ct.RowsAffected(), nil
 }
 
+// Next gets the next serial number
+func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
+
+	var (
+		err error
+		sql string
+	)
+
+	if next == nil {
+		return errors.New(`variable in next parameter must be initialized`)
+	}
+
+	sql = fmt.Sprintf("SELECT nextval('%s');", h.Escape(serial))
+
+	if h.tx != nil {
+		err = h.tx.QueryRow(h.ctx, sql).Scan(next)
+		if err == nil {
+			return err
+		}
+		return nil
+	}
+
+	err = h.con.QueryRow(h.ctx, sql).Scan(next)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // VerifyWithin a set of validation expression against the underlying database table
 func (h *PostgreSQLHelper) VerifyWithin(tablename string, values []std.VerifyExpression) (Valid bool, QueryOK bool, Message string) {
 	tableNameWithParameters := tablename
@@ -345,8 +375,8 @@ func (h *PostgreSQLHelper) Escape(fv string) string {
 		return ""
 	}
 
-	senc := h.dbi.StringEnclosingChar
-	sesc := h.dbi.StringEscapeChar
+	senc := *h.dbi.StringEnclosingChar
+	sesc := *h.dbi.StringEscapeChar
 
 	if len(senc) == 0 {
 		senc = `'`
