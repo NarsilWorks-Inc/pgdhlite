@@ -66,13 +66,13 @@ func (h *PostgreSQLHelper) Close() error {
 	}
 
 	// if reused, closing will be prevented
-	if h.reused {
-		return nil
-	}
-
 	// if transaction count (number of begin transaction) is greater than 1,
 	// the current function's connection is derived from a parent connection
 	// and with this, we will not allow this connection to close
+	if h.reused && h.trcnt > 1 {
+		return nil
+	}
+
 	if h.trcnt > 1 {
 		return nil
 	}
@@ -112,8 +112,8 @@ func (h *PostgreSQLHelper) Begin() error {
 // Commit a transaction
 func (h *PostgreSQLHelper) Commit() error {
 
-	// exit if the connection was just reused
-	if h.reused {
+	// exit if the connection was just reused and transaction is still greater than 1
+	if h.reused && h.trcnt > 1 {
 		return nil
 	}
 
@@ -145,7 +145,7 @@ func (h *PostgreSQLHelper) Commit() error {
 func (h *PostgreSQLHelper) Rollback() error {
 
 	// exit if the connection was just reused
-	if h.reused {
+	if h.reused && h.trcnt > 1 {
 		return nil
 	}
 
