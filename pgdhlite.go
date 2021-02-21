@@ -2,7 +2,6 @@ package pgdhlite
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -63,7 +62,7 @@ func (h *PostgreSQLHelper) Open(ctx context.Context, di *cfg.DatabaseInfo) error
 func (h *PostgreSQLHelper) Close() error {
 
 	if h.con == nil {
-		return errors.New(`No connection of the object was initialized`)
+		return dhl.ErrNoConn
 	}
 
 	// if reused, closing will be prevented
@@ -96,7 +95,7 @@ func (h *PostgreSQLHelper) Begin() error {
 	)
 
 	if h.con == nil {
-		return errors.New(`No connection of the object was initialized`)
+		return dhl.ErrNoConn
 	}
 
 	if h.tx == nil {
@@ -121,7 +120,7 @@ func (h *PostgreSQLHelper) Commit() error {
 	}
 
 	if h.tx == nil || h.tx.Conn().IsClosed() {
-		return errors.New(`No transaction was initialized`)
+		return dhl.ErrNoTx
 	}
 
 	// when we get to the remaining transaction, we can commit
@@ -154,7 +153,7 @@ func (h *PostgreSQLHelper) Rollback() error {
 	}
 
 	if h.tx == nil || h.tx.Conn().IsClosed() {
-		return errors.New(`No transaction was initialized`)
+		return dhl.ErrNoTx
 	}
 
 	if h.trcnt == 1 {
@@ -182,7 +181,7 @@ func (h *PostgreSQLHelper) Mark(name string) error {
 	var err error
 
 	if h.tx == nil || h.tx.Conn().IsClosed() {
-		return errors.New(`No transaction was initialized`)
+		return dhl.ErrNoTx
 	}
 
 	// We can only mark if there was a begin
@@ -198,7 +197,7 @@ func (h *PostgreSQLHelper) Discard(name string) error {
 	var err error
 
 	if h.tx == nil || h.tx.Conn().IsClosed() {
-		return errors.New(`No transaction was initialized`)
+		return dhl.ErrNoTx
 	}
 
 	if h.trcnt > 0 {
@@ -213,7 +212,7 @@ func (h *PostgreSQLHelper) Save(name string) error {
 	var err error
 
 	if h.tx == nil || h.tx.Conn().IsClosed() {
-		return errors.New(`No transaction was initialized`)
+		return dhl.ErrNoTx
 	}
 
 	if h.trcnt > 0 {
@@ -322,7 +321,7 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 	)
 
 	if next == nil {
-		return errors.New(`variable in next parameter must be initialized`)
+		return dhl.ErrVarMustBeInit
 	}
 
 	sql = fmt.Sprintf("SELECT nextval('%s');", h.Escape(serial))

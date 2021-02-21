@@ -2,6 +2,7 @@ package pgdhlite
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -219,9 +220,7 @@ func TestGetRow(t *testing.T) {
 
 	if err != nil {
 
-		erx := dhl.ErrNoRows
-
-		if err != erx {
+		if !errors.Is(err, dhl.ErrNoRows) {
 			t.Log(err.Error())
 			t.Fail()
 			return
