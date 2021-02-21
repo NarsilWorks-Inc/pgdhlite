@@ -219,7 +219,9 @@ func TestGetRow(t *testing.T) {
 
 	if err != nil {
 
-		if err != dhl.ErrNoRows {
+		erx := dhl.ErrNoRows
+
+		if err != erx {
 			t.Log(err.Error())
 			t.Fail()
 			return

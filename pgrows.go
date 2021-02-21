@@ -1,8 +1,6 @@
 package pgdhlite
 
 import (
-	"errors"
-
 	"github.com/jackc/pgx/v4"
 )
 
@@ -44,13 +42,13 @@ func (ss PostgreSQLRows) Scan(dest ...interface{}) error {
 
 	err := ss.sqr.Scan(destq...)
 	if err != nil {
-		return errors.New(err.Error())
+		return err
 	}
 
 	// return values
 	err = copyScannedToDest(dest, destq)
 	if err != nil {
-		return errors.New(err.Error()) // simplify error
+		return err
 	}
 
 	return nil
