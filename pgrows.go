@@ -1,6 +1,10 @@
 package pgdhlite
 
-import "github.com/jackc/pgx/v4"
+import (
+	"errors"
+
+	"github.com/jackc/pgx/v4"
+)
 
 // PostgreSQLRows struct
 type PostgreSQLRows struct {
@@ -40,13 +44,13 @@ func (ss PostgreSQLRows) Scan(dest ...interface{}) error {
 
 	err := ss.sqr.Scan(destq...)
 	if err != nil {
-		return err
+		return errors.New(err.Error())
 	}
 
 	// return values
 	err = copyScannedToDest(dest, destq)
 	if err != nil {
-		return err
+		return errors.New(err.Error()) // simplify error
 	}
 
 	return nil
