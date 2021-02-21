@@ -218,9 +218,15 @@ func TestGetRow(t *testing.T) {
 		&ts.DateQueued)
 
 	if err != nil {
+
+		if err != dhl.ErrNoRows {
+			t.Log(err.Error())
+			t.Fail()
+			return
+		}
+
 		t.Log(err.Error())
-		t.Fail()
-		return
+
 	}
 
 	t.Logf("email_key: %v, Subject: %v, Format: %v, Sender: %v, SenderAddress: %v, Date Queued: %v",
