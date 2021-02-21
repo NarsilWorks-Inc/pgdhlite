@@ -29,7 +29,7 @@ type PostgreSQLHelper struct {
 
 func init() {
 	dhl.SetHelper(`pgdhlite`, &PostgreSQLHelper{})
-	dhl.SetErrNoRows(pgx.ErrNoRows.Error())
+	dhl.SetErrNoRows(pgx.ErrNoRows)
 }
 
 // Open a new connection
