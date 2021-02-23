@@ -2,6 +2,7 @@ package pgdhlite
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -386,7 +387,10 @@ func (h *PostgreSQLHelper) VerifyWithin(tablename string, values []std.VerifyExp
 
 	err = h.QueryRow(sql, args...).Scan(&exists)
 	if err != nil {
-		return false, false, err.Error()
+		if !errors.Is(err, dhl.ErrNoRows) {
+			return false, false, err.Error()
+		}
+		return false, true, ""
 	}
 
 	return exists, true, ""
