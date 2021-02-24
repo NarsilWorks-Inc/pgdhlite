@@ -319,6 +319,161 @@ func TestWriteTransactions(t *testing.T) {
 
 }
 
+func TestWriteNestedWithTransactions(t *testing.T) {
+
+	var (
+		err error
+		//affr int64
+		c dhl.DataHelperLite
+	)
+
+	c, err = dhl.New(nil, `pgdhlite`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	cf, err := cfg.LoadConfig(`config.json`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	if err = c.Open(context.Background(), cf.GetDatabaseInfo(`DEFAULT`)); err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+	defer c.Close()
+
+	i := 0
+
+	c.Begin()
+
+	for {
+
+		if i > 999 {
+			break
+		}
+
+		// go to a function to reuse
+		func(dh *dhl.DataHelperLite) {
+
+			x, err := dhl.New(dh, `pgdhlite`)
+			if err != nil {
+				t.Log(err.Error())
+				t.Fail()
+				return
+			}
+
+			if err = x.Open(context.Background(), cf.GetDatabaseInfo(`DEFAULT`)); err != nil {
+				t.Log(err.Error())
+				t.Fail()
+				return
+			}
+			defer x.Close()
+
+			x.Begin()
+
+			_, err = x.Exec(`INSERT INTO tnfemailsent (
+									email_key, subject, body,
+									format, importance, sender_name,
+									sender_address, application_id,
+									date_queued, date_sent
+								) VALUES (nextval('testsequence'), 'Subject 1', 'Message' || $1,
+										'HTML', 1, 'Me',
+										'me@message.com', 'TestApp',
+										 $2, timezone('utc'::text, CURRENT_TIMESTAMP));`, fmt.Sprintf("%d", i), time.Now().UTC())
+			if err != nil {
+				x.Rollback()
+				t.Log(err.Error())
+			}
+
+			x.Commit()
+		}(&c)
+
+		i++
+	}
+
+	c.Commit()
+
+}
+
+func TestWriteNested(t *testing.T) {
+
+	var (
+		err error
+		//affr int64
+		c dhl.DataHelperLite
+	)
+
+	c, err = dhl.New(nil, `pgdhlite`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	cf, err := cfg.LoadConfig(`config.json`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	if err = c.Open(context.Background(), cf.GetDatabaseInfo(`DEFAULT`)); err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+	defer c.Close()
+
+	i := 0
+
+	for {
+
+		if i > 999 {
+			break
+		}
+
+		// go to a function to reuse
+		func(dh *dhl.DataHelperLite) {
+
+			x, err := dhl.New(dh, `pgdhlite`)
+			if err != nil {
+				t.Log(err.Error())
+				t.Fail()
+				return
+			}
+
+			if err = x.Open(context.Background(), cf.GetDatabaseInfo(`DEFAULT`)); err != nil {
+				t.Log(err.Error())
+				t.Fail()
+				return
+			}
+			defer x.Close()
+
+			_, err = x.Exec(`INSERT INTO tnfemailsent (
+									email_key, subject, body,
+									format, importance, sender_name,
+									sender_address, application_id,
+									date_queued, date_sent
+								) VALUES (nextval('testsequence'), 'Subject 1', 'Message' || $1,
+										'HTML', 1, 'Me',
+										'me@message.com', 'TestApp',
+										 $2, timezone('utc'::text, CURRENT_TIMESTAMP));`, fmt.Sprintf("%d", i), time.Now().UTC())
+			if err != nil {
+				t.Log(err.Error())
+			}
+		}(&c)
+
+		i++
+	}
+
+}
+
 func TestSequence(t *testing.T) {
 	var (
 		err error
