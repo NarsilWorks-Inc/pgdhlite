@@ -423,7 +423,9 @@ func TestWriteNested(t *testing.T) {
 		return
 	}
 
-	if err = c.Open(context.Background(), cf.GetDatabaseInfo(`DEFAULT`)); err != nil {
+	ctx := context.Background()
+
+	if err = c.Open(ctx, cf.GetDatabaseInfo(`DEFAULT`)); err != nil {
 		t.Log(err.Error())
 		t.Fail()
 		return
@@ -448,7 +450,7 @@ func TestWriteNested(t *testing.T) {
 				return
 			}
 
-			if err = x.Open(context.Background(), cf.GetDatabaseInfo(`DEFAULT`)); err != nil {
+			if err = x.Open(ctx, cf.GetDatabaseInfo(`DEFAULT`)); err != nil {
 				t.Log(err.Error())
 				t.Fail()
 				return
@@ -466,13 +468,14 @@ func TestWriteNested(t *testing.T) {
 										 $2, timezone('utc'::text, CURRENT_TIMESTAMP));`, fmt.Sprintf("%d", i), time.Now().UTC())
 			if err != nil {
 				t.Log(err.Error())
+				t.Fail()
 			}
 		}(&c)
 
 		i++
 	}
 
-	c.Close()
+	//c.Close()
 }
 
 func TestSequence(t *testing.T) {

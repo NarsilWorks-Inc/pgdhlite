@@ -80,7 +80,13 @@ func (h *PostgreSQLHelper) Close() error {
 	// if err := h.con.Close(h.ctx); err != nil {
 	// 	return err
 	// }
-	h.con.Close()
+
+	// -----------------------------------------------------------
+	// NOTE:
+	// This part will be omitted as pgdhlite is using pgxpool
+	//
+	// h.con.Close()
+	// -----------------------------------------------------------
 
 	h.trcnt = 0
 
