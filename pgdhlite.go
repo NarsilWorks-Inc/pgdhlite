@@ -13,11 +13,13 @@ import (
 	std "github.com/eaglebush/stdutil"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 // PostgreSQLHelper - a struct derived from datahelperlite
 type PostgreSQLHelper struct {
-	con      *pgx.Conn
+	//con      *pgx.Conn
+	con      *pgxpool.Pool
 	dbi      *cfg.DatabaseInfo
 	ctx      context.Context
 	tx       pgx.Tx
@@ -46,8 +48,10 @@ func (h *PostgreSQLHelper) Open(ctx context.Context, di *cfg.DatabaseInfo) error
 	h.dbi = di
 	h.ctx = ctx
 
-	if h.con == nil || h.con.IsClosed() {
-		h.con, err = pgx.Connect(ctx, di.ConnectionString)
+	//if h.con == nil || h.con.IsClosed() {
+	if h.con == nil {
+		//h.con, err = pgx.Connect(ctx, di.ConnectionString)
+		h.con, err = pgxpool.Connect(ctx, di.ConnectionString)
 		if err != nil {
 			return err
 		}
@@ -73,9 +77,10 @@ func (h *PostgreSQLHelper) Close() error {
 		return nil
 	}
 
-	if err := h.con.Close(h.ctx); err != nil {
-		return err
-	}
+	// if err := h.con.Close(h.ctx); err != nil {
+	// 	return err
+	// }
+	h.con.Close()
 
 	h.trcnt = 0
 

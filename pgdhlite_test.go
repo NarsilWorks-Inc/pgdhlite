@@ -210,7 +210,7 @@ func TestGetRow(t *testing.T) {
 	err = c.QueryRow(`SELECT email_key, subject, format,
 						sender_name, sender_address, date_queued
 						FROM tnfemailsent
-						WHERE email_key = 1;`).Scan(
+						WHERE email_key = 224012;`).Scan(
 		&ts.EmailKey,
 		&ts.Subject,
 		&ts.Format,
