@@ -428,7 +428,7 @@ func TestWriteNested(t *testing.T) {
 		t.Fail()
 		return
 	}
-	defer c.Close()
+	//defer c.Close()
 
 	i := 0
 
@@ -472,6 +472,7 @@ func TestWriteNested(t *testing.T) {
 		i++
 	}
 
+	c.Close()
 }
 
 func TestSequence(t *testing.T) {

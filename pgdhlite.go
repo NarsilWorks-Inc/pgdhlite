@@ -17,14 +17,15 @@ import (
 
 // PostgreSQLHelper - a struct derived from datahelperlite
 type PostgreSQLHelper struct {
-	con    *pgx.Conn
-	dbi    *cfg.DatabaseInfo
-	ctx    context.Context
-	tx     pgx.Tx
-	rws    dhl.Rows
-	rw     dhl.Row
-	trcnt  int
-	reused bool
+	con   *pgx.Conn
+	dbi   *cfg.DatabaseInfo
+	ctx   context.Context
+	tx    pgx.Tx
+	rws   dhl.Rows
+	rw    dhl.Row
+	trcnt int
+	//reused   bool
+	reusecnt int
 }
 
 func init() {
@@ -51,9 +52,11 @@ func (h *PostgreSQLHelper) Open(ctx context.Context, di *cfg.DatabaseInfo) error
 		if err != nil {
 			return err
 		}
-		h.reused = false
+		h.reusecnt = 0
+		//h.reused = false
 	} else {
-		h.reused = true
+		//h.reused = true
+		h.reusecnt++
 	}
 
 	return nil
@@ -70,23 +73,28 @@ func (h *PostgreSQLHelper) Close() error {
 	// if transaction count (number of begin transaction) is greater than 1,
 	// the current function's connection is derived from a parent connection
 	// and with this, we will not allow this connection to close
-	if h.reused {
-		if h.tx != nil && h.trcnt > 0 {
-			return nil
-		}
+	// if h.reused {
+	// 	if h.tx != nil && h.trcnt > 0 {
+	// 		return nil
+	// 	}
+	// 	return nil
+	// }
+
+	if h.reusecnt > 0 {
+		h.reusecnt--
 		return nil
 	}
 
-	if h.trcnt > 1 {
-		return nil
-	}
+	// if h.trcnt > 1 {
+	// 	return nil
+	// }
 
 	if err := h.con.Close(h.ctx); err != nil {
 		return err
 	}
 
 	h.trcnt = 0
-	h.reused = false
+	//h.reused = false
 
 	return nil
 }
@@ -118,7 +126,12 @@ func (h *PostgreSQLHelper) Begin() error {
 func (h *PostgreSQLHelper) Commit() error {
 
 	// exit if the connection was just reused and transaction is still greater than 1
-	if h.reused && h.trcnt > 1 {
+	// if h.reused && h.trcnt > 1 {
+	// 	h.trcnt-- // deduct from transaction count
+	// 	return nil
+	// }
+
+	if h.reusecnt > 0 && h.trcnt > 1 {
 		h.trcnt-- // deduct from transaction count
 		return nil
 	}
@@ -151,7 +164,12 @@ func (h *PostgreSQLHelper) Commit() error {
 func (h *PostgreSQLHelper) Rollback() error {
 
 	// exit if the connection was just reused
-	if h.reused && h.trcnt > 1 {
+	// if h.reused && h.trcnt > 1 {
+	// 	h.trcnt-- // deduct from transaction count
+	// 	return nil
+	// }
+
+	if h.reusecnt > 0 && h.trcnt > 1 {
 		h.trcnt-- // deduct from transaction count
 		return nil
 	}
