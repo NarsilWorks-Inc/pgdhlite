@@ -429,6 +429,12 @@ func (h *PostgreSQLHelper) VerifyWithin(tablename string, values []std.VerifyExp
 		err    error
 	)
 
+	tableNameWithParameters = strings.TrimSpace(tableNameWithParameters)
+
+	if strings.HasSuffix(tableNameWithParameters, `;`) {
+		return false, false, `semicolons are not allowed at the end of this query`
+	}
+
 	sql = dhl.InterpolateTable(`SELECT EXISTS (SELECT 1 FROM `+tableNameWithParameters+`);`, h.dbi.Schema)
 
 	err = h.QueryRow(sql, args...).Scan(&exists)
