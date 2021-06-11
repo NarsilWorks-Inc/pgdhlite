@@ -292,7 +292,6 @@ func (h *PostgreSQLHelper) Exec(sql string, args ...interface{}) (int64, error) 
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	sql = dhl.ReplaceQueryParamMarker(sql, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
-
 	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
 
 	if h.tx != nil {
@@ -314,6 +313,50 @@ func (h *PostgreSQLHelper) Exec(sql string, args ...interface{}) (int64, error) 
 	}
 
 	return ct.RowsAffected(), nil
+}
+
+// Exists checks if a record exist
+func (h *PostgreSQLHelper) Exists(sqlwparams string, args ...interface{}) (bool, error) {
+
+	var (
+		err    error
+		exists bool
+		sql    string
+	)
+
+	// replace question mark (?) parameter with configured query parameter, if there are any
+	sqlwparams = dhl.ReplaceQueryParamMarker(sqlwparams, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
+	sqlwparams = strings.TrimSpace(dhl.InterpolateTable(sqlwparams, h.dbi.Schema))
+
+	if strings.HasSuffix(sqlwparams, `;`) {
+		return false, errors.New(`semicolons are not allowed at the end of this query`)
+	}
+
+	sql = `SELECT EXISTS (SELECT 1 FROM ` + sqlwparams + `);`
+
+	if h.tx != nil {
+		err = h.tx.QueryRow(h.ctx, sql, args...).Scan(&exists)
+		if errors.Is(err, dhl.ErrNoRows) {
+			return false, nil
+		}
+
+		if err != nil {
+			return false, err
+		}
+
+		return exists, nil
+	}
+
+	err = h.con.QueryRow(h.ctx, sql, args...).Scan(&exists)
+	if errors.Is(err, dhl.ErrNoRows) {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
 }
 
 // Next gets the next serial number

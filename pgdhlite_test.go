@@ -517,3 +517,44 @@ func TestSequence(t *testing.T) {
 
 	t.Logf("Sequence for testsequence: %d", seq)
 }
+
+func TestExists(t *testing.T) {
+	var (
+		err    error
+		exists bool
+		c      dhl.DataHelperLite
+	)
+
+	//c = &SQLServerHelper{}
+
+	c, err = dhl.New(nil, `pgdhlite`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	cf, err := cfg.LoadConfig(`config.json`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	if err = c.Open(context.Background(), cf.GetDatabaseInfo(`DEFAULT`)); err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+	defer c.Close()
+
+	exists, err = c.Exists(`tnfemailsent WHERE email_key = $1`, 231012)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	t.Logf("Exists: %t", exists)
+
+}
