@@ -558,3 +558,48 @@ func TestExists(t *testing.T) {
 	t.Logf("Exists: %t", exists)
 
 }
+
+func TestQueryArray(t *testing.T) {
+	var (
+		err    error
+		exists bool
+		c      dhl.DataHelperLite
+	)
+
+	//c = &SQLServerHelper{}
+
+	c, err = dhl.New(nil, `pgdhlite`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	cf, err := cfg.LoadConfig(`config.json`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	if err = c.Open(context.Background(), cf.GetDatabaseInfo(`DEFAULT`)); err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+	defer c.Close()
+
+	//var arr []int
+	var arr []int
+
+	//err = c.QueryArray(`SELECT EmailKey FROM tnfEmailSent;`, &arr)
+	err = c.QueryArray(`SELECT email_key FROM tnfemailsent;`, &arr)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	t.Logf("Exists: %t", exists)
+
+}
