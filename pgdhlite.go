@@ -693,3 +693,19 @@ func (h *PostgreSQLHelper) Escape(fv string) string {
 
 	return strings.ReplaceAll(fv, senc, sesc+sesc)
 }
+
+// DatabaseVersion returns database version
+func (h *PostgreSQLHelper) DatabaseVersion() string {
+
+	var (
+		err     error
+		version string
+	)
+
+	err = h.QueryRow(`SELECT version();`).Scan(&version)
+	if err != nil {
+		version = err.Error()
+	}
+
+	return version
+}
