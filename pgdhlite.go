@@ -35,6 +35,11 @@ func init() {
 	dhl.SetErrNoRows(pgx.ErrNoRows)
 }
 
+// NewHelper instantiates new helper
+func (h *PostgreSQLHelper) NewHelper() dhl.DataHelperLite {
+	return &PostgreSQLHelper{}
+}
+
 // Open a new connection
 func (h *PostgreSQLHelper) Open(ctx context.Context, di *cfg.DatabaseInfo) error {
 
