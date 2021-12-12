@@ -714,3 +714,31 @@ func (h *PostgreSQLHelper) DatabaseVersion() string {
 
 	return version
 }
+
+// Now gets the current server date
+func (h *PostgreSQLHelper) Now() *time.Time {
+
+	var tm *time.Time
+
+	err := h.QueryRow(`SELECT NOW();`).Scan(&tm)
+	if err != nil {
+		tn := time.Now()
+		return &tn
+	}
+
+	return tm
+}
+
+// NowUTC gets the current server date in UTC
+func (h *PostgreSQLHelper) NowUTC() *time.Time {
+
+	var tm *time.Time
+
+	err := h.QueryRow(`timezone('UTC',CURRENT_TIMESTAMP);`).Scan(&tm)
+	if err != nil {
+		tn := time.Now().UTC()
+		return &tn
+	}
+
+	return tm
+}
