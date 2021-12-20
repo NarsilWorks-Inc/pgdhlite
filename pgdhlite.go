@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	dhl "github.com/NarsilWorks-Inc/datahelperlite"
+	"github.com/segmentio/ksuid"
 
 	cfg "github.com/eaglebush/config"
 	std "github.com/eaglebush/stdutil"
@@ -28,6 +30,8 @@ type PostgreSQLHelper struct {
 	rw       dhl.Row
 	trcnt    int
 	reusecnt int
+	trnmap   map[string]string
+	closemu  sync.RWMutex
 }
 
 func init() {
@@ -37,7 +41,9 @@ func init() {
 
 // NewHelper instantiates new helper
 func (h *PostgreSQLHelper) NewHelper() dhl.DataHelperLite {
-	return &PostgreSQLHelper{}
+	return &PostgreSQLHelper{
+		trnmap: make(map[string]string),
+	}
 }
 
 // Open a new connection
@@ -122,10 +128,41 @@ func (h *PostgreSQLHelper) Begin() error {
 	return nil
 }
 
-// Commit a transaction
-func (h *PostgreSQLHelper) Commit() error {
+// BeginDR begins a transaction with a transaction id
+// also stored in to a local map or list. It will
+// be useful if used in a deferred rollback setup
+func (h *PostgreSQLHelper) BeginDR() (string, error) {
+
+	tranid := ksuid.New().String()
+	h.trnmap[tranid] = `OK`
+
+	return tranid, h.Begin()
+}
+
+// Commit a transaction. The tranid argument is supplied
+// using the BeginDR() function.
+func (h *PostgreSQLHelper) Commit(tranid ...string) error {
+
+	// tranid is used to identify the current transaction
+	// if the coding style used is deferring rollback
+	// after Begin() is called, this would solve the
+	// problem of rolled back transaction in reusablity mode
+
+	// If the tranid is not found on the map, it will
+	// not take any action
+	if len(tranid) > 0 {
+		if _, ok := h.trnmap[tranid[0]]; !ok {
+			return nil
+		}
+
+		// the key is deleted after calling Commit
+		defer delete(h.trnmap, tranid[0])
+	}
 
 	if h.trcnt > 1 {
+		h.closemu.Lock()
+		defer h.closemu.Unlock()
+
 		h.trcnt-- // deduct from transaction count
 		return nil
 	}
@@ -142,6 +179,8 @@ func (h *PostgreSQLHelper) Commit() error {
 	}
 
 	// decrement transaction
+	h.closemu.Lock()
+	defer h.closemu.Unlock()
 	if h.trcnt > 0 {
 		h.trcnt--
 	}
@@ -154,10 +193,29 @@ func (h *PostgreSQLHelper) Commit() error {
 	return nil
 }
 
-// Rollback a transaction
-func (h *PostgreSQLHelper) Rollback() error {
+// Rollback a transaction. The tranid argument is supplied
+// using the BeginDR() function.
+func (h *PostgreSQLHelper) Rollback(tranid ...string) error {
+
+	// tranid is used to identify the current transaction
+	// if the coding style used is deferring rollback
+	// after Begin() is called, this would solve the
+	// problem of rolled back transaction in reusablity mode
+
+	// If the tranid is not found on the map, it will
+	// not take any action
+	if len(tranid) > 0 {
+		if _, ok := h.trnmap[tranid[0]]; !ok {
+			return nil
+		}
+
+		// the tranid is deleted when Rollback() is called
+		defer delete(h.trnmap, tranid[0])
+	}
 
 	if h.trcnt > 1 {
+		h.closemu.Lock()
+		defer h.closemu.Unlock()
 		h.trcnt-- // deduct from transaction count
 		return nil
 	}
@@ -173,6 +231,8 @@ func (h *PostgreSQLHelper) Rollback() error {
 	}
 
 	// decrement transaction
+	h.closemu.Lock()
+	defer h.closemu.Unlock()
 	if h.trcnt > 0 {
 		h.trcnt--
 	}
