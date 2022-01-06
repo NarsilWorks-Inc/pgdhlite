@@ -82,6 +82,17 @@ func TestGetRows(t *testing.T) {
 		datequeued                          time.Time
 	)
 
+	cols, err := rows.Columns()
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	for _, col := range cols {
+		t.Log(col.Name(), col.DatabaseTypeName(), col.ScanType())
+	}
+
 	for rows.Next() {
 		err = rows.Scan(
 			&emailkey,

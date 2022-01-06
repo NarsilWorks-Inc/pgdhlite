@@ -1,6 +1,10 @@
 package pgdhlite
 
 import (
+	"reflect"
+
+	"github.com/NarsilWorks-Inc/datahelperlite"
+	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
 )
 
@@ -21,12 +25,11 @@ func (ss PostgreSQLRows) Close() {
 	if ss.sqr != nil {
 		ss.sqr.Close()
 	}
-
-	return
 }
 
 // Err check
 func (ss PostgreSQLRows) Err() error {
+	ss.sqr.FieldDescriptions()
 	return ss.sqr.Err()
 }
 
@@ -52,6 +55,25 @@ func (ss PostgreSQLRows) Scan(dest ...interface{}) error {
 	}
 
 	return nil
+}
+
+// Columns from the rows
+func (ss PostgreSQLRows) Columns() ([]datahelperlite.Column, error) {
+
+	pgci := pgtype.NewConnInfo()
+	fds := ss.sqr.FieldDescriptions()
+
+	ctps := make([]datahelperlite.Column, len(fds))
+	for i, ct := range fds {
+		dt, _ := pgci.DataTypeForOID(ct.DataTypeOID)
+		ctps[i] = Column{
+			name:    string(ct.Name),
+			dbtname: dt.Name,
+			scntyp:  reflect.TypeOf(dt.Value),
+		}
+	}
+
+	return ctps, nil
 }
 
 // Values from the rows
