@@ -111,6 +111,18 @@ func copyScannedToDest(dest, src []interface{}) error {
 			default:
 				return errors.New(`unhandled shopspring.NullDecimal type`)
 			}
+		case *sql.RawBytes:
+			switch s := dest[i].(type) {
+			case *string:
+				*s = string(([]byte)(*x))
+			case **string:
+				**s = string(([]byte)(*x))
+			case interface{}:
+				xs := string(([]byte)(*x))
+				s = &xs
+			default:
+				return errors.New(`unhandled sql.RawBytes type`)
+			}
 		default:
 			return errors.New(`unhandled sql.Null<type>`)
 		}
@@ -152,6 +164,8 @@ func prepareDest(dest []interface{}) (destq []interface{}) {
 			destq[i] = &[]byte{}
 		case *ssd.Decimal, **ssd.Decimal:
 			destq[i] = &ssd.NullDecimal{}
+		case interface{}, *interface{}:
+			destq[i] = &sql.RawBytes{}
 		default:
 			log.Fatal("Unhandled data type: " + reflect.TypeOf(x).Name())
 		}
