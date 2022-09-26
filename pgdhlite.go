@@ -13,7 +13,6 @@ import (
 	"github.com/segmentio/ksuid"
 
 	cfg "github.com/eaglebush/config"
-	std "github.com/eaglebush/stdutil"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -679,8 +678,8 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 }
 
 // VerifyWithin a set of validation expression against the underlying database table
-func (h *PostgreSQLHelper) VerifyWithin(tablename string, values []std.VerifyExpression) (Valid bool, QueryOK bool, Message string) {
-	tableNameWithParameters := tablename
+func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExpression) (Valid bool, Error error) {
+	tableNameWithParameters := tableName
 
 	args := make([]interface{}, len(values))
 	i := 0
@@ -722,7 +721,7 @@ func (h *PostgreSQLHelper) VerifyWithin(tablename string, values []std.VerifyExp
 	tableNameWithParameters = strings.TrimSpace(tableNameWithParameters)
 
 	if strings.HasSuffix(tableNameWithParameters, `;`) {
-		return false, false, `semicolons are not allowed at the end of this query`
+		return false, errors.New(`semicolons are not allowed at the end of this query`)
 	}
 
 	sql = dhl.InterpolateTable(`SELECT EXISTS (SELECT 1 FROM `+tableNameWithParameters+`);`, h.dbi.Schema)
@@ -730,12 +729,12 @@ func (h *PostgreSQLHelper) VerifyWithin(tablename string, values []std.VerifyExp
 	err = h.QueryRow(sql, args...).Scan(&exists)
 	if err != nil {
 		if !errors.Is(err, dhl.ErrNoRows) {
-			return false, false, err.Error()
+			return false, err
 		}
-		return false, true, ""
+		return false, nil
 	}
 
-	return exists, true, ""
+	return exists, nil
 }
 
 // Escape a field value (fv) from disruption by single quote
