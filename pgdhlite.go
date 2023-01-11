@@ -793,7 +793,7 @@ func (h *PostgreSQLHelper) NowUTC() *time.Time {
 
 	var tm *time.Time
 
-	err := h.QueryRow(`timezone('UTC',CURRENT_TIMESTAMP);`).Scan(&tm)
+	err := h.QueryRow(`SELECT timezone('UTC',CURRENT_TIMESTAMP);`).Scan(&tm)
 	if err != nil {
 		tn := time.Now().UTC()
 		return &tn
