@@ -652,12 +652,52 @@ func (h *PostgreSQLHelper) Exists(sqlwparams string, args ...interface{}) (bool,
 func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 
 	var (
-		err error
-		sql string
+		err  error
+		sql  string
+		affr int64
 	)
 
 	if next == nil {
 		return dhl.ErrVarMustBeInit
+	}
+
+	// if the database config has set a sequence generator, this will use it
+	sg := h.dbi.SequenceGenerator
+	if sg != nil {
+
+		if sg.NamePlaceHolder == "" {
+			return errors.New(`name place holder should be provided. ` +
+				`Set name place holder in {placeholder} format. ` +
+				`Place holder name should also be present in the upsert or select query`)
+		}
+
+		if sg.ResultQuery == "" {
+			return errors.New(`nesult query must be provided`)
+		}
+
+		// Upsert is usually an insert or an update, so we execute it.
+		// It is optional when all queries are set in the result query.
+		// affr (affected rows) must be at least 1 to proceed
+		affr = 1
+		if sg.UpsertQuery != "" {
+			sql = strings.ReplaceAll(sg.UpsertQuery, sg.NamePlaceHolder, serial)
+			if affr, err = h.Exec(sql); err != nil {
+				return err
+			}
+		}
+
+		// in the event that the upsert alters the affr variable to 0, we return an error
+		if affr == 0 {
+			return errors.New(`upsert query did not insert or update any records`)
+		}
+
+		// result query needs a single scalar value to be returned
+		sql = strings.ReplaceAll(sg.ResultQuery, sg.NamePlaceHolder, serial)
+		if err = h.QueryRow(sql).Scan(next); err != nil {
+			return err
+		}
+
+		return nil
 	}
 
 	sql = fmt.Sprintf("SELECT nextval('%s');", h.Escape(serial))
