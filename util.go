@@ -51,6 +51,11 @@ func copyScannedToDest(dest, src []interface{}) error {
 				case **int:
 					ic := int(x.Int32)
 					*s = &ic
+				case *int8:
+					*s = int8(x.Int32)
+				case **int8:
+					ic := int8(x.Int32)
+					*s = &ic
 				default:
 					return errors.New(`unhandled sql.NullInt32 type`)
 				}
