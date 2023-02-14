@@ -614,3 +614,46 @@ func TestQueryArray(t *testing.T) {
 	t.Logf("Exists: %t", exists)
 
 }
+
+func TestUint8AndUInt16(t *testing.T) {
+	var (
+		err error
+		c   dhl.DataHelperLite
+	)
+
+	c, err = dhl.New(nil, `pgdhlite`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	cf, err := cfg.LoadConfig(`config.json`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	if err = c.Open(context.Background(), cf.GetDatabaseInfo(`DEFAULT`)); err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+	defer c.Close()
+
+	var (
+		priority *uint8
+		ordinal  *uint16
+	)
+
+	err = c.QueryRow(`SELECT Priority, Ordinal FROM order_line_dist WHERE record_key='2LhzRFkSHztQKu9ZhjqQiwZTbrE';`).Scan(&priority, &ordinal)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	t.Logf("Priority: %d, Ordinal %d", *priority, *ordinal)
+
+}
