@@ -657,3 +657,45 @@ func TestUint8AndUInt16(t *testing.T) {
 	t.Logf("Priority: %d, Ordinal %d", *priority, *ordinal)
 
 }
+
+func TestFloat32(t *testing.T) {
+	var (
+		err error
+		c   dhl.DataHelperLite
+	)
+
+	c, err = dhl.New(nil, `pgdhlite`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	cf, err := cfg.LoadConfig(`config.json`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	if err = c.Open(context.Background(), cf.GetDatabaseInfo(`DEFAULT`)); err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+	defer c.Close()
+
+	var (
+		qty_original *float32
+	)
+
+	err = c.QueryRow(`SELECT qty_original FROM order_line_dist WHERE record_key='2LhzRFkSHztQKu9ZhjqQiwZTbrE';`).Scan(&qty_original)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	t.Logf("QtyOrigin: %f", *qty_original)
+
+}

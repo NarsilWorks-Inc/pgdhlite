@@ -92,6 +92,11 @@ func copyScannedToDest(dest, src []interface{}) error {
 					*s = x.Float64
 				case **float64:
 					*s = &x.Float64
+				case *float32:
+					*s = float32(x.Float64)
+				case **float32:
+					xs := float32(x.Float64)
+					*s = &xs
 				default:
 					return errors.New(`unhandled sql.NullFloat64 type`)
 				}
@@ -177,8 +182,7 @@ func prepareDest(dest []interface{}) (destq []interface{}) {
 			destq[i] = &sql.NullInt32{}
 		case *int16, *uint16, **int16, **uint16:
 			destq[i] = &sql.NullInt16{}
-		case *int64, *uint64,
-			**int64, **uint64:
+		case *int64, *uint64, **int64, **uint64:
 			destq[i] = &sql.NullInt64{}
 		case *float32, *float64, **float32, **float64:
 			destq[i] = &sql.NullFloat64{}
