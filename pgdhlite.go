@@ -693,7 +693,7 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 
 		// result query needs a single scalar value to be returned
 		sql = strings.ReplaceAll(sg.ResultQuery, sg.NamePlaceHolder, serial)
-		if err = h.QueryRow(sql).Scan(next); err != nil {
+		if err = h.QueryRow(sql).Scan(&next); err != nil {
 			return err
 		}
 
@@ -703,14 +703,14 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 	sql = fmt.Sprintf("SELECT nextval('%s');", h.Escape(serial))
 
 	if h.tx != nil {
-		err = h.tx.QueryRow(h.ctx, sql).Scan(next)
+		err = h.tx.QueryRow(h.ctx, sql).Scan(&next)
 		if err == nil {
 			return err
 		}
 		return nil
 	}
 
-	err = h.con.QueryRow(h.ctx, sql).Scan(next)
+	err = h.con.QueryRow(h.ctx, sql).Scan(&next)
 	if err != nil {
 		return err
 	}
