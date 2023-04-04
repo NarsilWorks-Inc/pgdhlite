@@ -700,13 +700,16 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		return nil
 	}
 
-	// If there are no sequence configuration specified
-	// we will create a sequence
+	// If there are no sequence configuration specified, we will create a sequence.
+	// The format of the sequence should be <schema>.<sequence name>.
+	// Dots are not allowed in the sequence name, therefore it must be converted to
+	// another character, for example an underscore. If there is a dot specified
+	// in the serial, it would be parsed as the schema.
 	sch := "public"
 	sln := serial
 	if idx := strings.Index(serial, "."); idx != -1 {
-		sch = serial[:idx-1]
-		sln = serial[idx+1:]
+		sch = serial[:idx]
+		sln = strings.ReplaceAll(serial[idx+1:], ".", "_")
 	}
 
 	seq := fmt.Sprintf(`CREATE SEQUENCE IF NOT EXISTS %s.%s
