@@ -700,6 +700,8 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		return nil
 	}
 
+	// If there are no sequence configuration specified
+	// we will create a sequence
 	sch := "public"
 	sln := serial
 	if idx := strings.Index(serial, "."); idx != -1 {
