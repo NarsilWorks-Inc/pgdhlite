@@ -700,14 +700,39 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		return nil
 	}
 
-	sql = fmt.Sprintf("SELECT nextval('%s');", h.Escape(serial))
+	sch := "public"
+	sln := serial
+	if idx := strings.Index(serial, "."); idx != -1 {
+		sch = serial[:idx-1]
+		sln = serial[idx+1:]
+	}
 
+	seq := fmt.Sprintf(`CREATE SEQUENCE IF NOT EXISTS %s.%s
+				INCREMENT 1
+				START 1
+				MINVALUE 1
+				MAXVALUE 2147483647
+				CACHE 1;`, sch, sln)
+
+	// Check if sequence exists, if not create it
+	// Get next value of the sequence
+	sql = fmt.Sprintf("SELECT nextval('%s');", h.Escape(sch+"."+sln))
 	if h.tx != nil {
+		_, err = h.tx.Exec(h.ctx, seq)
+		if err == nil {
+			return err
+		}
+
 		err = h.tx.QueryRow(h.ctx, sql).Scan(next)
 		if err == nil {
 			return err
 		}
 		return nil
+	}
+
+	_, err = h.tx.Exec(h.ctx, seq)
+	if err == nil {
+		return err
 	}
 
 	err = h.con.QueryRow(h.ctx, sql).Scan(next)
