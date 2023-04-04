@@ -724,19 +724,19 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 	sql = fmt.Sprintf("SELECT nextval('%s');", h.Escape(sch+"."+sln))
 	if h.tx != nil {
 		_, err = h.tx.Exec(h.ctx, seq)
-		if err == nil {
+		if err != nil {
 			return err
 		}
 
 		err = h.tx.QueryRow(h.ctx, sql).Scan(next)
-		if err == nil {
+		if err != nil {
 			return err
 		}
 		return nil
 	}
 
 	_, err = h.tx.Exec(h.ctx, seq)
-	if err == nil {
+	if err != nil {
 		return err
 	}
 
