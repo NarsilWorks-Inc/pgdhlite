@@ -87,43 +87,26 @@ func (h *PostgreSQLHelper) Close() error {
 		h.reusecnt--
 		return nil
 	}
-
-	// if err := h.con.Close(h.ctx); err != nil {
-	// 	return err
-	// }
-
-	// -----------------------------------------------------------
-	// NOTE:
-	// This part will be omitted as pgdhlite is using pgxpool
-	//
-	// h.con.Close()
-	// -----------------------------------------------------------
-
+	h.con.Close()
 	h.trcnt = 0
-
 	return nil
 }
 
 // Begin a transaction. If there is an existing transaction, begin is ignored
 func (h *PostgreSQLHelper) Begin() error {
-
 	var (
 		err error
 	)
-
 	if h.con == nil {
 		return dhl.ErrNoConn
 	}
-
 	if h.tx == nil {
 		h.tx, err = h.con.Begin(h.ctx)
 		if err != nil {
 			return err
 		}
 	}
-
 	h.trcnt++ // count begin transactions
-
 	return nil
 }
 
@@ -131,10 +114,8 @@ func (h *PostgreSQLHelper) Begin() error {
 // also stored in to a local map or list. It will
 // be useful if used in a deferred rollback setup
 func (h *PostgreSQLHelper) BeginDR() (string, error) {
-
 	tranid := ksuid.New().String()
 	h.trnmap[tranid] = `OK`
-
 	return tranid, h.Begin()
 }
 
@@ -207,7 +188,6 @@ func (h *PostgreSQLHelper) Rollback(tranid ...string) error {
 		if _, ok := h.trnmap[tranid[0]]; !ok {
 			return nil
 		}
-
 		// the tranid is deleted when Rollback() is called
 		defer delete(h.trnmap, tranid[0])
 	}
@@ -246,79 +226,60 @@ func (h *PostgreSQLHelper) Rollback(tranid ...string) error {
 
 // Mark a savepoint
 func (h *PostgreSQLHelper) Mark(name string) error {
-
 	var err error
-
 	if h.tx == nil || h.tx.Conn().IsClosed() {
 		return dhl.ErrNoTx
 	}
-
 	// We can only mark if there was a begin
 	if h.trcnt > 0 {
 		_, err = h.tx.Exec(h.ctx, `SAVEPOINT sp_`+name+`;`)
 	}
-
 	return err
 }
 
 // Discard a savepoint
 func (h *PostgreSQLHelper) Discard(name string) error {
 	var err error
-
 	if h.tx == nil || h.tx.Conn().IsClosed() {
 		return dhl.ErrNoTx
 	}
-
 	if h.trcnt > 0 {
 		_, err = h.tx.Exec(h.ctx, `ROLLBACK TO SAVEPOINT sp_`+name+`;`)
 	}
-
 	return err
 }
 
 // Save a savepoint
 func (h *PostgreSQLHelper) Save(name string) error {
 	var err error
-
 	if h.tx == nil || h.tx.Conn().IsClosed() {
 		return dhl.ErrNoTx
 	}
-
 	if h.trcnt > 0 {
 		_, err = h.tx.Exec(h.ctx, `RELEASE SAVEPOINT sp_`+name+`;`)
 	}
-
 	return err
 }
 
 // Query from PostgreSQL helper
 func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, error) {
-
 	var (
 		err error
 		sqr pgx.Rows
 	)
-
-	// replace question mark (?) parameter with configured query parameter, if there are any
 	sql = dhl.ReplaceQueryParamMarker(sql, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
-
-	// replace tables meant for interpolation {table} for putting the schema
 	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
-
 	if h.tx != nil {
 		sqr, err = h.tx.Query(h.ctx, sql, args...)
 	} else {
 		sqr, err = h.con.Query(h.ctx, sql, args...)
 	}
-
 	if err != nil {
 		return h.rws, err
 	}
-
 	if sqr != nil {
 		h.rws = NewPostgreSQLRows(&sqr)
 	}
-
 	return h.rws, nil
 }
 
@@ -348,201 +309,155 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 	} else {
 		sqr, err = h.con.Query(h.ctx, sql, args...)
 	}
-
 	if err != nil {
 		return err
 	}
-
 	defer sqr.Close()
 
 	if sqr != nil {
 		switch t := out.(type) {
 		case *[]string:
-
 			arr := make([]string, 0)
 			var a string
-
 			for sqr.Next() {
 				if err = sqr.Scan(&a); err != nil {
 					return err
 				}
-
 				arr = append(arr, a)
 			}
-
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-
 			*t = arr
-
 			_ = t
 		case *[]int:
 			arr := make([]int, 0)
 			var a int
-
 			for sqr.Next() {
 				if err = sqr.Scan(&a); err != nil {
 					return err
 				}
-
 				arr = append(arr, a)
 			}
-
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-
 			*t = arr
 			_ = t
 		case *[]int8:
 			arr := make([]int8, 0)
 			var a int8
-
 			for sqr.Next() {
 				if err = sqr.Scan(&a); err != nil {
 					return err
 				}
-
 				arr = append(arr, a)
 			}
-
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-
 			*t = arr
 			_ = t
 		case *[]int16:
 			arr := make([]int16, 0)
 			var a int16
-
 			for sqr.Next() {
 				if err = sqr.Scan(&a); err != nil {
 					return err
 				}
-
 				arr = append(arr, a)
 			}
-
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-
 			*t = arr
 			_ = t
 		case *[]int32:
 			arr := make([]int32, 0)
 			var a int32
-
 			for sqr.Next() {
 				if err = sqr.Scan(&a); err != nil {
 					return err
 				}
-
 				arr = append(arr, a)
 			}
-
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-
 			*t = arr
 			_ = t
 		case *[]int64:
 			arr := make([]int64, 0)
 			var a int64
-
 			for sqr.Next() {
 				if err = sqr.Scan(&a); err != nil {
 					return err
 				}
-
 				arr = append(arr, a)
 			}
-
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-
 			*t = arr
 			_ = t
 		case *[]bool:
 			arr := make([]bool, 0)
 			var a bool
-
 			for sqr.Next() {
 				if err = sqr.Scan(&a); err != nil {
 					return err
 				}
-
 				arr = append(arr, a)
 			}
-
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-
 			*t = arr
 			_ = t
 		case *[]float32:
 			arr := make([]float32, 0)
 			var a float32
-
 			for sqr.Next() {
 				if err = sqr.Scan(&a); err != nil {
 					return err
 				}
-
 				arr = append(arr, a)
 			}
-
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-
 			*t = arr
 			_ = t
 		case *[]float64:
 			arr := make([]float64, 0)
 			var a float64
-
 			for sqr.Next() {
 				if err = sqr.Scan(&a); err != nil {
 					return err
 				}
-
 				arr = append(arr, a)
 			}
-
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-
 			*t = arr
 			_ = t
 		case *[]time.Time:
 			arr := make([]time.Time, 0)
 			var a time.Time
-
 			for sqr.Next() {
 				if err = sqr.Scan(&a); err != nil {
 					return err
 				}
-
 				arr = append(arr, a)
 			}
-
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-
 			*t = arr
 			_ = t
 		}
-
 	}
-
 	return nil
 }
 
