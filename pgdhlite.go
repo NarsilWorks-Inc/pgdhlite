@@ -10,12 +10,11 @@ import (
 	"time"
 
 	dhl "github.com/NarsilWorks-Inc/datahelperlite"
-	"github.com/segmentio/ksuid"
-
 	cfg "github.com/eaglebush/config"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/segmentio/ksuid"
 )
 
 // PostgreSQLHelper - a struct derived from datahelperlite
@@ -47,48 +46,47 @@ func (h *PostgreSQLHelper) NewHelper() dhl.DataHelperLite {
 
 // Open a new connection
 func (h *PostgreSQLHelper) Open(ctx context.Context, di *cfg.DatabaseInfo) error {
-
 	var (
 		err error
 	)
-
 	if ctx == nil {
 		ctx = context.Background()
 	}
-
 	h.dbi = di
 	h.ctx = ctx
-
 	//if h.con == nil || h.con.IsClosed() {
 	if h.con == nil {
-		//h.con, err = pgx.Connect(ctx, di.ConnectionString)
 		h.con, err = pgxpool.Connect(ctx, di.ConnectionString)
 		if err != nil {
 			return err
 		}
+		h.closemu.Lock()
 		h.reusecnt = 0
 	} else {
+		h.closemu.Lock()
 		h.reusecnt++
 	}
-
+	h.closemu.Unlock()
 	return nil
 }
 
 // Close PostgreSQLHelper
 func (h *PostgreSQLHelper) Close() error {
-
 	if h.con == nil {
 		return dhl.ErrNoConn
 	}
-
 	// if reused, closing will be prevented
 	// until reusing is zero
 	if h.reusecnt > 0 {
+		h.closemu.Lock()
 		h.reusecnt--
+		h.closemu.Unlock()
 		return nil
 	}
 	h.con.Close()
+	h.closemu.Lock()
 	h.trcnt = 0
+	h.closemu.Unlock()
 	return nil
 }
 
@@ -106,7 +104,9 @@ func (h *PostgreSQLHelper) Begin() error {
 			return err
 		}
 	}
+	h.closemu.Lock()
 	h.trcnt++ // count begin transactions
+	h.closemu.Unlock()
 	return nil
 }
 
@@ -134,16 +134,14 @@ func (h *PostgreSQLHelper) Commit(tranid ...string) error {
 		if _, ok := h.trnmap[tranid[0]]; !ok {
 			return nil
 		}
-
 		// the key is deleted after calling Commit
 		defer delete(h.trnmap, tranid[0])
 	}
 
 	if h.trcnt > 1 {
 		h.closemu.Lock()
-		defer h.closemu.Unlock()
-
 		h.trcnt-- // deduct from transaction count
+		h.closemu.Unlock()
 		return nil
 	}
 
@@ -159,17 +157,16 @@ func (h *PostgreSQLHelper) Commit(tranid ...string) error {
 	}
 
 	// decrement transaction
-	h.closemu.Lock()
-	defer h.closemu.Unlock()
 	if h.trcnt > 0 {
+		h.closemu.Lock()
 		h.trcnt--
+		h.closemu.Unlock()
 	}
 
 	// if trancount is zero, we can set the tx to nil
 	if h.trcnt == 0 {
 		h.tx = nil
 	}
-
 	return nil
 }
 
@@ -194,15 +191,13 @@ func (h *PostgreSQLHelper) Rollback(tranid ...string) error {
 
 	if h.trcnt > 1 {
 		h.closemu.Lock()
-		defer h.closemu.Unlock()
 		h.trcnt-- // deduct from transaction count
+		h.closemu.Unlock()
 		return nil
 	}
-
 	if h.tx == nil || h.tx.Conn().IsClosed() {
 		return dhl.ErrNoTx
 	}
-
 	if h.trcnt == 1 {
 		if err := h.tx.Rollback(h.ctx); err != nil {
 			return err
@@ -210,17 +205,15 @@ func (h *PostgreSQLHelper) Rollback(tranid ...string) error {
 	}
 
 	// decrement transaction
-	h.closemu.Lock()
-	defer h.closemu.Unlock()
 	if h.trcnt > 0 {
+		h.closemu.Lock()
 		h.trcnt--
+		h.closemu.Unlock()
 	}
-
 	// if trancount is zero, we can set the tx to nil
 	if h.trcnt == 0 {
 		h.tx = nil
 	}
-
 	return nil
 }
 
@@ -285,12 +278,10 @@ func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, err
 
 // QueryArray puts the single column result to an output array
 func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...interface{}) error {
-
 	var (
 		err error
 		sqr pgx.Rows
 	)
-
 	switch out.(type) {
 	case *[]string, *[]int, *[]int8, *[]int16, *[]int32, *[]int64, *[]bool, *[]float32, *[]float64:
 	case *[]time.Time:
@@ -300,10 +291,8 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	sql = dhl.ReplaceQueryParamMarker(sql, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
-
 	// replace tables meant for interpolation {table} for putting the schema
 	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
-
 	if h.tx != nil {
 		sqr, err = h.tx.Query(h.ctx, sql, args...)
 	} else {
@@ -317,144 +306,164 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 	if sqr != nil {
 		switch t := out.(type) {
 		case *[]string:
-			arr := make([]string, 0)
-			var a string
+			idx := 0
+			if t == nil {
+				t = new([]string)
+			}
 			for sqr.Next() {
-				if err = sqr.Scan(&a); err != nil {
+				*t = append(*t, "")
+				if err = sqr.Scan(&(*t)[idx]); err != nil {
 					return err
 				}
-				arr = append(arr, a)
+				idx++
 			}
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-			*t = arr
 			_ = t
 		case *[]int:
-			arr := make([]int, 0)
-			var a int
+			idx := 0
+			if t == nil {
+				t = new([]int)
+			}
 			for sqr.Next() {
-				if err = sqr.Scan(&a); err != nil {
+				*t = append(*t, 0)
+				if err = sqr.Scan(&(*t)[idx]); err != nil {
 					return err
 				}
-				arr = append(arr, a)
+				idx++
 			}
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-			*t = arr
 			_ = t
 		case *[]int8:
-			arr := make([]int8, 0)
-			var a int8
+			idx := 0
+			if t == nil {
+				t = new([]int8)
+			}
 			for sqr.Next() {
-				if err = sqr.Scan(&a); err != nil {
+				*t = append(*t, 0)
+				if err = sqr.Scan(&(*t)[idx]); err != nil {
 					return err
 				}
-				arr = append(arr, a)
+				idx++
 			}
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-			*t = arr
 			_ = t
 		case *[]int16:
-			arr := make([]int16, 0)
-			var a int16
+			idx := 0
+			if t == nil {
+				t = new([]int16)
+			}
 			for sqr.Next() {
-				if err = sqr.Scan(&a); err != nil {
+				*t = append(*t, 0)
+				if err = sqr.Scan(&(*t)[idx]); err != nil {
 					return err
 				}
-				arr = append(arr, a)
+				idx++
 			}
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-			*t = arr
 			_ = t
 		case *[]int32:
-			arr := make([]int32, 0)
-			var a int32
+			idx := 0
+			if t == nil {
+				t = new([]int32)
+			}
 			for sqr.Next() {
-				if err = sqr.Scan(&a); err != nil {
+				*t = append(*t, 0)
+				if err = sqr.Scan(&(*t)[idx]); err != nil {
 					return err
 				}
-				arr = append(arr, a)
+				idx++
 			}
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-			*t = arr
 			_ = t
 		case *[]int64:
-			arr := make([]int64, 0)
-			var a int64
+			idx := 0
+			if t == nil {
+				t = new([]int64)
+			}
 			for sqr.Next() {
-				if err = sqr.Scan(&a); err != nil {
+				*t = append(*t, 0)
+				if err = sqr.Scan(&(*t)[idx]); err != nil {
 					return err
 				}
-				arr = append(arr, a)
+				idx++
 			}
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-			*t = arr
 			_ = t
 		case *[]bool:
-			arr := make([]bool, 0)
-			var a bool
+			idx := 0
+			if t == nil {
+				t = new([]bool)
+			}
 			for sqr.Next() {
-				if err = sqr.Scan(&a); err != nil {
+				*t = append(*t, false)
+				if err = sqr.Scan(&(*t)[idx]); err != nil {
 					return err
 				}
-				arr = append(arr, a)
+				idx++
 			}
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-			*t = arr
 			_ = t
 		case *[]float32:
-			arr := make([]float32, 0)
-			var a float32
+			idx := 0
+			if t == nil {
+				t = new([]float32)
+			}
 			for sqr.Next() {
-				if err = sqr.Scan(&a); err != nil {
+				*t = append(*t, 0)
+				if err = sqr.Scan(&(*t)[idx]); err != nil {
 					return err
 				}
-				arr = append(arr, a)
+				idx++
 			}
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-			*t = arr
 			_ = t
 		case *[]float64:
-			arr := make([]float64, 0)
-			var a float64
+			idx := 0
+			if t == nil {
+				t = new([]float64)
+			}
 			for sqr.Next() {
-				if err = sqr.Scan(&a); err != nil {
+				*t = append(*t, 0)
+				if err = sqr.Scan(&(*t)[idx]); err != nil {
 					return err
 				}
-				arr = append(arr, a)
+				idx++
 			}
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-			*t = arr
 			_ = t
 		case *[]time.Time:
-			arr := make([]time.Time, 0)
-			var a time.Time
+			idx := 0
+			if t == nil {
+				t = new([]time.Time)
+			}
 			for sqr.Next() {
-				if err = sqr.Scan(&a); err != nil {
+				*t = append(*t, time.Time{})
+				if err = sqr.Scan(&(*t)[idx]); err != nil {
 					return err
 				}
-				arr = append(arr, a)
+				idx++
 			}
 			if err = sqr.Err(); err != nil {
 				return err
 			}
-			*t = arr
 			_ = t
 		}
 	}
@@ -470,19 +479,15 @@ func (h *PostgreSQLHelper) QueryRow(sql string, args ...interface{}) dhl.Row {
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	sql = dhl.ReplaceQueryParamMarker(sql, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
-
 	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
-
 	if h.tx != nil {
 		sqr = h.tx.QueryRow(h.ctx, sql, args...)
 	} else {
 		sqr = h.con.QueryRow(h.ctx, sql, args...)
 	}
-
 	if sqr != nil {
 		h.rw = NewPostgreSQLRow(sqr)
 	}
-
 	return h.rw
 }
 
@@ -497,15 +502,11 @@ func (h *PostgreSQLHelper) Exec(sql string, args ...interface{}) (int64, error) 
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	sql = dhl.ReplaceQueryParamMarker(sql, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
 	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
-
 	if h.tx != nil {
-
 		ct, err = h.tx.Exec(h.ctx, sql, args...)
-
 		if err == nil {
 			return ct.RowsAffected(), nil
 		}
-
 		if err != pgx.ErrTxClosed {
 			return 0, err
 		}
@@ -531,23 +532,19 @@ func (h *PostgreSQLHelper) Exists(sqlwparams string, args ...interface{}) (bool,
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	sqlwparams = dhl.ReplaceQueryParamMarker(sqlwparams, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
 	sqlwparams = strings.TrimSpace(dhl.InterpolateTable(sqlwparams, h.dbi.Schema))
-
 	if strings.HasSuffix(sqlwparams, `;`) {
 		return false, errors.New(`semicolons are not allowed at the end of this query`)
 	}
 
 	sql = `SELECT EXISTS (SELECT 1 FROM ` + sqlwparams + `);`
-
 	if h.tx != nil {
 		err = h.tx.QueryRow(h.ctx, sql, args...).Scan(&exists)
 		if errors.Is(err, dhl.ErrNoRows) {
 			return false, nil
 		}
-
 		if err != nil {
 			return false, err
 		}
-
 		return exists, nil
 	}
 
@@ -555,11 +552,9 @@ func (h *PostgreSQLHelper) Exists(sqlwparams string, args ...interface{}) (bool,
 	if errors.Is(err, dhl.ErrNoRows) {
 		return false, nil
 	}
-
 	if err != nil {
 		return false, err
 	}
-
 	return exists, nil
 }
 
@@ -571,21 +566,17 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		sql  string
 		affr int64
 	)
-
 	if next == nil {
 		return dhl.ErrVarMustBeInit
 	}
-
 	// if the database config has set a sequence generator, this will use it
 	sg := h.dbi.SequenceGenerator
 	if sg != nil {
-
 		if sg.NamePlaceHolder == "" {
 			return errors.New(`name place holder should be provided. ` +
 				`Set name place holder in {placeholder} format. ` +
 				`Place holder name should also be present in the upsert or select query`)
 		}
-
 		if sg.ResultQuery == "" {
 			return errors.New(`nesult query must be provided`)
 		}
@@ -600,18 +591,15 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 				return err
 			}
 		}
-
 		// in the event that the upsert alters the affr variable to 0, we return an error
 		if affr == 0 {
 			return errors.New(`upsert query did not insert or update any records`)
 		}
-
 		// result query needs a single scalar value to be returned
 		sql = strings.ReplaceAll(sg.ResultQuery, sg.NamePlaceHolder, serial)
 		if err = h.QueryRow(sql).Scan(next); err != nil {
 			return err
 		}
-
 		return nil
 	}
 
@@ -627,12 +615,13 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		sln = strings.ReplaceAll(serial[idx+1:], ".", "_")
 	}
 
-	seq := fmt.Sprintf(`CREATE SEQUENCE IF NOT EXISTS %s.%s
-				INCREMENT 1
-				START 1
-				MINVALUE 1
-				MAXVALUE 2147483647
-				CACHE 1;`, sch, sln)
+	seq := fmt.Sprintf(`
+		CREATE SEQUENCE IF NOT EXISTS %s.%s
+			INCREMENT 1
+			START 1
+			MINVALUE 1
+			MAXVALUE 2147483647
+			CACHE 1;`, sch, sln)
 
 	// Check if sequence exists, if not create it
 	// Get next value of the sequence
@@ -642,19 +631,16 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		if err != nil {
 			return err
 		}
-
 		err = h.tx.QueryRow(h.ctx, sql).Scan(next)
 		if err != nil {
 			return err
 		}
 		return nil
 	}
-
 	_, err = h.tx.Exec(h.ctx, seq)
 	if err != nil {
 		return err
 	}
-
 	err = h.con.QueryRow(h.ctx, sql).Scan(next)
 	if err != nil {
 		return err
@@ -670,31 +656,25 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 	i := 0
 	andstr := ""
 	placeholder := h.dbi.ParameterPlaceholder
-
 	if len(values) > 0 {
 		tableNameWithParameters += ` WHERE `
 	}
 
 	for _, v := range values {
-
 		if h.dbi.ParameterInSequence {
 			placeholder = h.dbi.ParameterPlaceholder + strconv.Itoa(i+1)
 		}
-
 		// If there is no operator, we default to "="
 		if v.Operator == "" {
 			v.Operator = "="
 		}
-
 		if v.Value == nil {
 			v.Operator = " IS "
 		}
-
 		tableNameWithParameters += andstr + v.Name + v.Operator + placeholder
 		args[i] = v.Value
 		i++
 		andstr = " AND "
-
 	}
 
 	var (
@@ -704,13 +684,10 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 	)
 
 	tableNameWithParameters = strings.TrimSpace(tableNameWithParameters)
-
 	if strings.HasSuffix(tableNameWithParameters, `;`) {
 		return false, errors.New(`semicolons are not allowed at the end of this query`)
 	}
-
 	sql = dhl.InterpolateTable(`SELECT EXISTS (SELECT 1 FROM `+tableNameWithParameters+`);`, h.dbi.Schema)
-
 	err = h.QueryRow(sql, args...).Scan(&exists)
 	if err != nil {
 		if !errors.Is(err, dhl.ErrNoRows) {
@@ -724,65 +701,51 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 
 // Escape a field value (fv) from disruption by single quote
 func (h *PostgreSQLHelper) Escape(fv string) string {
-
 	if len(fv) == 0 {
 		return ""
 	}
-
 	senc := *h.dbi.StringEnclosingChar
 	sesc := *h.dbi.StringEscapeChar
-
 	if len(senc) == 0 {
 		senc = `'`
 	}
-
 	if len(sesc) == 0 {
 		sesc = `'`
 	}
-
 	return strings.ReplaceAll(fv, senc, sesc+sesc)
 }
 
 // DatabaseVersion returns database version
 func (h *PostgreSQLHelper) DatabaseVersion() string {
-
 	var (
 		err     error
 		version string
 	)
-
 	err = h.QueryRow(`SELECT version();`).Scan(&version)
 	if err != nil {
 		version = err.Error()
 	}
-
 	return version
 }
 
 // Now gets the current server date
 func (h *PostgreSQLHelper) Now() *time.Time {
-
-	var tm *time.Time
-
+	var tm time.Time
 	err := h.QueryRow(`SELECT NOW();`).Scan(&tm)
 	if err != nil {
-		tn := time.Now()
-		return &tn
+		tm = time.Now()
+		return &tm
 	}
-
-	return tm
+	return &tm
 }
 
 // NowUTC gets the current server date in UTC
 func (h *PostgreSQLHelper) NowUTC() *time.Time {
-
-	var tm *time.Time
-
+	var tm time.Time
 	err := h.QueryRow(`SELECT timezone('UTC',CURRENT_TIMESTAMP);`).Scan(&tm)
 	if err != nil {
-		tn := time.Now().UTC()
-		return &tn
+		tm = time.Now().UTC()
+		return &tm
 	}
-
-	return tm
+	return &tm
 }

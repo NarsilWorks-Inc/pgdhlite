@@ -54,7 +54,7 @@ func TestGetRows(t *testing.T) {
 		return
 	}
 
-	cf, err := cfg.LoadConfig(`config.json`)
+	cf, err := cfg.Load(`config.json`)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -136,7 +136,7 @@ func TestGetRow(t *testing.T) {
 		return
 	}
 
-	cf, err := cfg.LoadConfig(`config.json`)
+	cf, err := cfg.Load(`config.json`)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -263,7 +263,7 @@ func TestWriteTransactions(t *testing.T) {
 		return
 	}
 
-	cf, err := cfg.LoadConfig(`config.json`)
+	cf, err := cfg.Load(`config.json`)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -345,7 +345,7 @@ func TestWriteNestedWithTransactions(t *testing.T) {
 		return
 	}
 
-	cf, err := cfg.LoadConfig(`config.json`)
+	cf, err := cfg.Load(`config.json`)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -427,7 +427,7 @@ func TestWriteNested(t *testing.T) {
 		return
 	}
 
-	cf, err := cfg.LoadConfig(`config.json`)
+	cf, err := cfg.Load(`config.json`)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -503,7 +503,7 @@ func TestSequence(t *testing.T) {
 		return
 	}
 
-	cf, err := cfg.LoadConfig(`config.json`)
+	cf, err := cfg.Load(`config.json`)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -545,7 +545,7 @@ func TestExists(t *testing.T) {
 		return
 	}
 
-	cf, err := cfg.LoadConfig(`config.json`)
+	cf, err := cfg.Load(`config.json`)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -586,7 +586,7 @@ func TestQueryArray(t *testing.T) {
 		return
 	}
 
-	cf, err := cfg.LoadConfig(`config.json`)
+	cf, err := cfg.Load(`config.json`)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -628,7 +628,7 @@ func TestUint8AndUInt16(t *testing.T) {
 		return
 	}
 
-	cf, err := cfg.LoadConfig(`config.json`)
+	cf, err := cfg.Load(`config.json`)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -671,7 +671,7 @@ func TestFloat32(t *testing.T) {
 		return
 	}
 
-	cf, err := cfg.LoadConfig(`config.json`)
+	cf, err := cfg.Load(`config.json`)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
