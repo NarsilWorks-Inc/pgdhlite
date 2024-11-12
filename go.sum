@@ -1,7 +1,7 @@
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/Masterminds/semver/v3 v3.1.1/go.mod h1:VPu/7SZ7ePZ3QOrcuXROw5FAcLl4a0cBrbBpGY/8hQs=
-github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20241112065539-bdd3b0bfc23e h1:c9Is7aGSpB7j/3w7Ms3k9k2kr/qiDF/gyqAa4pdG2vE=
-github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20241112065539-bdd3b0bfc23e/go.mod h1:lAknat6PQhWim7iTHr2WJddKUGJtE57nVUk+V41nuRk=
+github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20241112071901-15f3106e921a h1:HV7ML+vD7eJfsoi6lmZrcF+ZDGRc/zu5TgJ0pB7j99c=
+github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20241112071901-15f3106e921a/go.mod h1:MHnwuW54xd3xlxF2/IbKvCWj3Zuj6ihWYYH12ffJI1Q=
 github.com/cockroachdb/apd v1.1.0 h1:3LFP3629v+1aKXU5Q37mxmRxX/pIu1nijXydLShEq5I=
 github.com/cockroachdb/apd v1.1.0/go.mod h1:8Sl8LxpKi29FqWXR16WEFZRNSz3SoPzUzeMeY4+DwBQ=
 github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
@@ -10,8 +10,8 @@ github.com/creack/pty v1.1.7/go.mod h1:lj5s0c3V2DBrqTV7llrYr5NG6My20zk30Fl46Y7Do
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/eaglebush/config v0.0.0-20241112065028-9b5375fa5244 h1:tYlj6tq3EuWJ9OZM3/SPSRYChWB9d7rV3ZjxoJN1ddE=
-github.com/eaglebush/config v0.0.0-20241112065028-9b5375fa5244/go.mod h1:UkGigEfx+L8E6iSiy130RcUrBl3SV9DPbisdV212wf8=
+github.com/eaglebush/config v0.0.0-20241112071821-d764539c5f47 h1:oHVsx2R5OMHnCs+dhAj4HV96fn6Otvrkj+9QzqrFT1A=
+github.com/eaglebush/config v0.0.0-20241112071821-d764539c5f47/go.mod h1:UkGigEfx+L8E6iSiy130RcUrBl3SV9DPbisdV212wf8=
 github.com/go-kit/log v0.1.0/go.mod h1:zbhenjAZHb184qTLMA9ZjW7ThYL0H2mk7Q6pNt4vbaY=
 github.com/go-logfmt/logfmt v0.5.0/go.mod h1:wCYkCAKZfumFQihp8CzCvQ3paCTfi41vtzG1KdI/P7A=
 github.com/go-stack/stack v1.8.0/go.mod h1:v0f6uXyyMGvRgIKkXu+yp6POWl0qKG85gN/melR3HDY=

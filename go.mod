@@ -3,8 +3,8 @@ module github.com/NarsilWorks-Inc/pgdhlite
 go 1.19
 
 require (
-	github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20241112065539-bdd3b0bfc23e
-	github.com/eaglebush/config v0.0.0-20241112065028-9b5375fa5244
+	github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20241112071901-15f3106e921a
+	github.com/eaglebush/config v0.0.0-20241112071821-d764539c5f47
 	github.com/jackc/pgconn v1.14.3
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/shopspring/decimal v1.4.0
