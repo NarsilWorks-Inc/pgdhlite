@@ -2,7 +2,6 @@ package pgdhlite
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"strconv"
@@ -15,21 +14,22 @@ import (
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/segmentio/ksuid"
 )
 
-// PostgreSQLHelper implements DataHelperLite
+// PostgreSQLHelper - a struct derived from datahelperlite
 type PostgreSQLHelper struct {
-	conn *pgxpool.Pool
-	dbi  *cfg.DatabaseInfo
-	ctx  context.Context
-	tx   pgx.Tx
-	rws  dhl.Rows
-	trCnt,
-	reuseCnt,
-	txInstIdx uint8
-	rw     sync.RWMutex
-	txInst map[uint8]uint8
-	err    error
+	//con      *pgx.Conn
+	con      *pgxpool.Pool
+	dbi      *cfg.DatabaseInfo
+	ctx      context.Context
+	tx       pgx.Tx
+	rws      dhl.Rows
+	rw       dhl.Row
+	trcnt    int
+	reusecnt int
+	trnmap   map[string]string
+	closemu  sync.RWMutex
 }
 
 func init() {
@@ -40,247 +40,218 @@ func init() {
 // NewHelper instantiates new helper
 func (h *PostgreSQLHelper) NewHelper() dhl.DataHelperLite {
 	return &PostgreSQLHelper{
-		txInst:    make(map[uint8]uint8),
-		txInstIdx: 0,
+		trnmap: make(map[string]string),
 	}
 }
 
 // Open a new connection
 func (h *PostgreSQLHelper) Open(ctx context.Context, di *cfg.DatabaseInfo) error {
-	h.err = nil
-	h.txInst = make(map[uint8]uint8)
-	h.txInstIdx = 0
-	h.dbi = di
+	var (
+		err error
+	)
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	h.dbi = di
 	h.ctx = ctx
-
-	if !(h.conn == nil) {
-		h.rw.Lock()
-		h.reuseCnt++
-		h.rw.Unlock()
-		return nil
+	//if h.con == nil || h.con.IsClosed() {
+	if h.con == nil {
+		h.con, err = pgxpool.Connect(ctx, di.ConnectionString)
+		if err != nil {
+			return err
+		}
+		h.closemu.Lock()
+		h.reusecnt = 0
+	} else {
+		h.closemu.Lock()
+		h.reusecnt++
 	}
-
-	var cfg *pgxpool.Config
-	cfg, h.err = pgxpool.ParseConfig(di.ConnectionString)
-	if h.err != nil {
-		return fmt.Errorf("open: %w", h.err)
-	}
-
-	if di.MaxOpenConnection != nil {
-		cfg.MaxConns = int32(*di.MaxIdleConnection)
-	}
-	if di.MaxConnectionLifetime != nil {
-		cfg.MaxConnLifetime = time.Duration(*di.MaxConnectionLifetime)
-	}
-	if di.MaxConnectionIdleTime != nil {
-		cfg.MaxConnIdleTime = time.Duration(*di.MaxConnectionIdleTime)
-	}
-	h.conn, h.err = pgxpool.ConnectConfig(ctx, cfg)
-	if h.err != nil {
-		return fmt.Errorf("open: %w", h.err)
-	}
-	h.rw.Lock()
-	h.reuseCnt = 0
-	h.rw.Unlock()
+	h.closemu.Unlock()
 	return nil
 }
 
 // Close PostgreSQLHelper
 func (h *PostgreSQLHelper) Close() error {
-	if h.conn == nil {
-		return nil
+	if h.con == nil {
+		return dhl.ErrNoConn
 	}
 	// if reused, closing will be prevented
 	// until reusing is zero
-	if h.reuseCnt > 0 {
-		h.rw.Lock()
-		h.reuseCnt--
-		h.rw.Unlock()
+	if h.reusecnt > 0 {
+		h.closemu.Lock()
+		h.reusecnt--
+		h.closemu.Unlock()
 		return nil
 	}
-	// check if transaction exists
-	if h.tx != nil {
-		h.Rollback()
-	}
-	h.conn.Close()
-	h.conn = nil
-	h.rw.Lock()
-	h.trCnt = 0
-	h.err = nil
-	h.rw.Unlock()
+	h.con.Close()
+	h.closemu.Lock()
+	h.trcnt = 0
+	h.closemu.Unlock()
 	return nil
 }
 
 // Begin a transaction. If there is an existing transaction, begin is ignored
 func (h *PostgreSQLHelper) Begin() error {
-	if h.err != nil {
-		return h.err
-	}
-	if h.conn == nil {
+	var (
+		err error
+	)
+	if h.con == nil {
 		return dhl.ErrNoConn
 	}
 	if h.tx == nil {
-		h.tx, h.err = h.conn.BeginTx(h.ctx, pgx.TxOptions{})
-		if h.err != nil {
-			return fmt.Errorf("begin: %w", h.err)
+		h.tx, err = h.con.Begin(h.ctx)
+		if err != nil {
+			return err
 		}
 	}
-	// Increment transaction count
-	// The transaction count will serve as the key for the new map value, set to 1
-	// Move the new index to the forward position
-	h.rw.Lock()
-	h.trCnt++
-	h.txInst[h.trCnt] = 1
-	h.txInstIdx = h.trCnt
-	h.rw.Unlock()
+	h.closemu.Lock()
+	h.trcnt++ // count begin transactions
+	h.closemu.Unlock()
 	return nil
 }
 
-// Commit a transaction.
-func (h *PostgreSQLHelper) Commit() error {
-	h.rw.Lock()
-	defer h.rw.Unlock()
+// BeginDR begins a transaction with a transaction id
+// also stored in to a local map or list. It will
+// be useful if used in a deferred rollback setup
+func (h *PostgreSQLHelper) BeginDR() (string, error) {
+	tranid := ksuid.New().String()
+	h.trnmap[tranid] = `OK`
+	return tranid, h.Begin()
+}
 
-	// Check if the current transaction instance is valid
-	flag, ok := h.txInst[h.txInstIdx]
-	if !ok || flag == 0 {
-		if ok {
-			h.txInstIdx-- // Move to the previous transaction instance
+// Commit a transaction. The tranid argument is supplied
+// using the BeginDR() function.
+func (h *PostgreSQLHelper) Commit(tranid ...string) error {
+
+	// tranid is used to identify the current transaction
+	// if the coding style used is deferring rollback
+	// after Begin() is called, this would solve the
+	// problem of rolled back transaction in reusablity mode
+
+	// If the tranid is not found on the map, it will
+	// not take any action
+	if len(tranid) > 0 {
+		if _, ok := h.trnmap[tranid[0]]; !ok {
+			return nil
 		}
+		// the key is deleted after calling Commit
+		defer delete(h.trnmap, tranid[0])
+	}
+
+	if h.trcnt > 1 {
+		h.closemu.Lock()
+		h.trcnt-- // deduct from transaction count
+		h.closemu.Unlock()
 		return nil
 	}
 
-	// Handle nested transactions
-	if h.trCnt > 1 {
-		h.trCnt--
-		h.txInst[h.txInstIdx] = 0 // Mark the current transaction as processed
-		return nil
+	if h.tx == nil || h.tx.Conn().IsClosed() {
+		return dhl.ErrNoTx
 	}
 
-	// Ensure DB, connection, and transaction are valid before committing
-	if h.conn == nil {
-		return fmt.Errorf("commit: %w", dhl.ErrNoConn)
+	// when we get to the remaining transaction, we can commit
+	if h.trcnt == 1 {
+		if err := h.tx.Commit(h.ctx); err != nil {
+			return err
+		}
+	}
+
+	// decrement transaction
+	if h.trcnt > 0 {
+		h.closemu.Lock()
+		h.trcnt--
+		h.closemu.Unlock()
+	}
+
+	// if trancount is zero, we can set the tx to nil
+	if h.trcnt == 0 {
+		h.tx = nil
+	}
+	return nil
+}
+
+// Rollback a transaction. The tranid argument is supplied
+// using the BeginDR() function.
+func (h *PostgreSQLHelper) Rollback(tranid ...string) error {
+
+	// tranid is used to identify the current transaction
+	// if the coding style used is deferring rollback
+	// after Begin() is called, this would solve the
+	// problem of rolled back transaction in reusablity mode
+
+	// If the tranid is not found on the map, it will
+	// not take any action
+	if len(tranid) > 0 {
+		if _, ok := h.trnmap[tranid[0]]; !ok {
+			return nil
+		}
+		// the tranid is deleted when Rollback() is called
+		defer delete(h.trnmap, tranid[0])
+	}
+
+	if h.trcnt > 1 {
+		h.closemu.Lock()
+		h.trcnt-- // deduct from transaction count
+		h.closemu.Unlock()
+		return nil
 	}
 	if h.tx == nil || h.tx.Conn().IsClosed() {
-		return fmt.Errorf("commit: %w", dhl.ErrNoTx)
+		return dhl.ErrNoTx
+	}
+	if h.trcnt == 1 {
+		if err := h.tx.Rollback(h.ctx); err != nil {
+			return err
+		}
 	}
 
-	// Commit the outermost transaction
-	if h.trCnt == 1 {
-		if err := h.tx.Commit(h.ctx); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			return fmt.Errorf("commit: %w", err)
-		}
+	// decrement transaction
+	if h.trcnt > 0 {
+		h.closemu.Lock()
+		h.trcnt--
+		h.closemu.Unlock()
 	}
-
-	// Reset transaction state after a successful commit
-	h.tx = nil
-	h.trCnt = 0
-	h.txInstIdx = 0
-	h.txInst = make(map[uint8]uint8)
-
-	return nil
-}
-
-// Rollback a transaction.
-func (h *PostgreSQLHelper) Rollback() error {
-
-	h.rw.Lock()
-	defer h.rw.Unlock()
-
-	// If there's an error or this is the outermost transaction, rollback
-	if h.err != nil || h.trCnt == 1 {
-		// Ensure DB, connection, and transaction are valid before rolling back
-		if h.conn == nil {
-			return fmt.Errorf("rollback: %w", dhl.ErrNoConn)
-		}
-		if h.tx == nil || h.tx.Conn().IsClosed() {
-			return fmt.Errorf("rollback: %w", dhl.ErrNoTx)
-		}
-
-		// Perform rollback
-		if err := h.tx.Rollback(h.ctx); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			return fmt.Errorf("rollback: %w", err)
-		}
-
-		// Reset all transaction state after rollback
+	// if trancount is zero, we can set the tx to nil
+	if h.trcnt == 0 {
 		h.tx = nil
-		h.trCnt = 0
-		h.txInstIdx = 0
-		h.txInst = make(map[uint8]uint8)
-		return nil
 	}
-
-	// Handle nested transactions
-	flag, ok := h.txInst[h.txInstIdx]
-	if !ok || flag == 0 {
-		if ok {
-			h.txInstIdx-- // Move to the previous transaction instance
-		}
-		return nil
-	}
-
-	// Deduct transaction count for nested transactions
-	if h.trCnt > 1 {
-		h.trCnt--
-		h.txInst[h.txInstIdx] = 0 // Mark the current transaction as processed
-		return nil
-	}
-
 	return nil
 }
 
 // Mark a savepoint
 func (h *PostgreSQLHelper) Mark(name string) error {
-	if h.err != nil {
-		return h.err
+	var err error
+	if h.tx == nil || h.tx.Conn().IsClosed() {
+		return dhl.ErrNoTx
 	}
-	if h.conn == nil {
-		return fmt.Errorf("mark: %w", dhl.ErrNoConn)
+	// We can only mark if there was a begin
+	if h.trcnt > 0 {
+		_, err = h.tx.Exec(h.ctx, `SAVEPOINT sp_`+name+`;`)
 	}
-	if h.tx == nil {
-		return fmt.Errorf("rollback: %w", dhl.ErrNoTx)
-	}
-	if h.trCnt > 0 {
-		_, h.err = h.tx.Exec(h.ctx, `SAVEPOINT sp_`+name+`;`)
-	}
-	return fmt.Errorf("mark: %w", h.err)
+	return err
 }
 
 // Discard a savepoint
 func (h *PostgreSQLHelper) Discard(name string) error {
-	if h.err != nil {
-		return h.err
-	}
-	if h.conn == nil {
-		return dhl.ErrNoConn
-	}
+	var err error
 	if h.tx == nil || h.tx.Conn().IsClosed() {
 		return dhl.ErrNoTx
 	}
-	if h.trCnt > 0 {
-		_, h.err = h.tx.Exec(h.ctx, `ROLLBACK TO SAVEPOINT sp_`+name+`;`)
+	if h.trcnt > 0 {
+		_, err = h.tx.Exec(h.ctx, `ROLLBACK TO SAVEPOINT sp_`+name+`;`)
 	}
-	return fmt.Errorf("discard: %w", h.err)
+	return err
 }
 
 // Save a savepoint
 func (h *PostgreSQLHelper) Save(name string) error {
-	if h.err != nil {
-		return h.err
-	}
-	if h.conn == nil {
-		return fmt.Errorf("save: %w", dhl.ErrNoConn)
-	}
+	var err error
 	if h.tx == nil || h.tx.Conn().IsClosed() {
-		return fmt.Errorf("save: %w", dhl.ErrNoTx)
+		return dhl.ErrNoTx
 	}
-	if h.trCnt > 0 {
-		_, h.err = h.tx.Exec(h.ctx, `RELEASE SAVEPOINT sp_`+name+`;`)
+	if h.trcnt > 0 {
+		_, err = h.tx.Exec(h.ctx, `RELEASE SAVEPOINT sp_`+name+`;`)
 	}
-	return fmt.Errorf("save: %w", h.err)
+	return err
 }
 
 // Query from PostgreSQL helper
@@ -294,7 +265,7 @@ func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, err
 	if h.tx != nil {
 		sqr, err = h.tx.Query(h.ctx, sql, args...)
 	} else {
-		sqr, err = h.conn.Query(h.ctx, sql, args...)
+		sqr, err = h.con.Query(h.ctx, sql, args...)
 	}
 	if err != nil {
 		return h.rws, err
@@ -325,7 +296,7 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 	if h.tx != nil {
 		sqr, err = h.tx.Query(h.ctx, sql, args...)
 	} else {
-		sqr, err = h.conn.Query(h.ctx, sql, args...)
+		sqr, err = h.con.Query(h.ctx, sql, args...)
 	}
 	if err != nil {
 		return err
@@ -501,14 +472,23 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 
 // QueryRow from PostgreSQL helper
 func (h *PostgreSQLHelper) QueryRow(sql string, args ...interface{}) dhl.Row {
+
+	var (
+		sqr pgx.Row
+	)
+
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	sql = dhl.ReplaceQueryParamMarker(sql, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
 	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
 	if h.tx != nil {
-		return h.tx.QueryRow(h.ctx, sql, args...)
+		sqr = h.tx.QueryRow(h.ctx, sql, args...)
 	} else {
-		return h.conn.QueryRow(h.ctx, sql, args...)
+		sqr = h.con.QueryRow(h.ctx, sql, args...)
 	}
+	if sqr != nil {
+		h.rw = NewPostgreSQLRow(sqr)
+	}
+	return h.rw
 }
 
 // Exec from PostgreSQL helper
@@ -532,7 +512,7 @@ func (h *PostgreSQLHelper) Exec(sql string, args ...interface{}) (int64, error) 
 		}
 	}
 
-	ct, err = h.conn.Exec(h.ctx, sql, args...)
+	ct, err = h.con.Exec(h.ctx, sql, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -568,7 +548,7 @@ func (h *PostgreSQLHelper) Exists(sqlwparams string, args ...interface{}) (bool,
 		return exists, nil
 	}
 
-	err = h.conn.QueryRow(h.ctx, sql, args...).Scan(&exists)
+	err = h.con.QueryRow(h.ctx, sql, args...).Scan(&exists)
 	if errors.Is(err, dhl.ErrNoRows) {
 		return false, nil
 	}
@@ -661,7 +641,7 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 	if err != nil {
 		return err
 	}
-	err = h.conn.QueryRow(h.ctx, sql).Scan(next)
+	err = h.con.QueryRow(h.ctx, sql).Scan(next)
 	if err != nil {
 		return err
 	}

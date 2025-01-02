@@ -128,7 +128,8 @@ func copyScannedToDest(dest, src []interface{}) error {
 			case *[]byte:
 				*s = *x
 			case []byte:
-				s = *x
+				//s = *x
+				copy(dest[i].(json.RawMessage), *x)
 			case *json.RawMessage:
 				*s = *x
 			case json.RawMessage:

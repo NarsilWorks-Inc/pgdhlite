@@ -3,7 +3,7 @@ module github.com/NarsilWorks-Inc/pgdhlite
 go 1.19
 
 require (
-	github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20241112071901-15f3106e921a
+	github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20241218143223-6f2d4b5bf352
 	github.com/eaglebush/config v0.0.0-20241112071821-d764539c5f47
 	github.com/jackc/pgconn v1.14.3
 	github.com/jackc/pgx/v4 v4.18.3
@@ -18,7 +18,6 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgtype v1.14.4
 	github.com/jackc/puddle v1.3.0 // indirect
-	github.com/segmentio/ksuid v1.0.4
-	golang.org/x/crypto v0.29.0 // indirect
-	golang.org/x/text v0.20.0 // indirect
+	golang.org/x/crypto v0.31.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 )
