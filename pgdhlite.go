@@ -141,13 +141,13 @@ func (h *PostgreSQLHelper) Begin() error {
 
 // Commit a transaction.
 func (h *PostgreSQLHelper) Commit() error {
-	h.rw.Lock()
-	defer h.rw.Unlock()
-
 	// Return early if any of the conditions are true
 	if h.tx == nil || h.trCnt == 0 || h.txInstIdx == 0 || len(h.txInst) == 0 {
 		return nil
 	}
+
+	h.rw.Lock()
+	defer h.rw.Unlock()
 
 	// Check if the current transaction instance is valid
 	if flag := h.txInst[h.txInstIdx]; flag == 0 {
@@ -191,13 +191,13 @@ func (h *PostgreSQLHelper) Commit() error {
 // Rollback a transaction.
 func (h *PostgreSQLHelper) Rollback() error {
 
-	h.rw.Lock()
-	defer h.rw.Unlock()
-
 	// Return early if any of the conditions are true
 	if h.tx == nil || h.trCnt == 0 || h.txInstIdx == 0 || len(h.txInst) == 0 {
 		return nil
 	}
+
+	h.rw.Lock()
+	defer h.rw.Unlock()
 
 	// Handle nested transactions
 	// If the value of the map is zero, we move to the earlier transaction
