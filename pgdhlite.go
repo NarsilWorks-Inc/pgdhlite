@@ -47,6 +47,13 @@ func (h *PostgreSQLHelper) NewHelper() dhl.DataHelperLite {
 
 // Open a new connection
 func (h *PostgreSQLHelper) Open(ctx context.Context, di *cfg.DatabaseInfo) error {
+	if !(h.conn == nil) {
+		h.rw.Lock()
+		h.reuseCnt++
+		h.rw.Unlock()
+		return nil
+	}
+
 	h.err = nil
 	h.txInst = make(map[uint8]uint8)
 	h.txInstIdx = 0
@@ -55,13 +62,6 @@ func (h *PostgreSQLHelper) Open(ctx context.Context, di *cfg.DatabaseInfo) error
 		ctx = context.Background()
 	}
 	h.ctx = ctx
-
-	if !(h.conn == nil) {
-		h.rw.Lock()
-		h.reuseCnt++
-		h.rw.Unlock()
-		return nil
-	}
 
 	var cfg *pgxpool.Config
 	cfg, h.err = pgxpool.ParseConfig(di.ConnectionString)
