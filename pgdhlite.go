@@ -144,16 +144,20 @@ func (h *PostgreSQLHelper) Commit() error {
 	h.rw.Lock()
 	defer h.rw.Unlock()
 
-	// Check if the current transaction instance is valid
-	flag, ok := h.txInst[h.txInstIdx]
-	if !ok || flag == 0 {
-		if ok {
-			h.txInstIdx-- // Move to the previous transaction instance
-		}
+	// Return early if any of the conditions are true
+	if h.tx == nil || h.trCnt == 0 || h.txInstIdx == 0 || len(h.txInst) == 0 {
 		return nil
 	}
 
-	// Handle nested transactions
+	// Check if the current transaction instance is valid
+	if flag := h.txInst[h.txInstIdx]; flag == 0 {
+		h.txInstIdx-- // Move to the previous transaction instance
+		return nil
+	}
+
+	// If the transaction is not the first transaction,
+	// reduce the transaction count and set the current map index value
+	// as processed
 	if h.trCnt > 1 {
 		h.trCnt--
 		h.txInst[h.txInstIdx] = 0 // Mark the current transaction as processed
@@ -190,8 +194,30 @@ func (h *PostgreSQLHelper) Rollback() error {
 	h.rw.Lock()
 	defer h.rw.Unlock()
 
-	// If there's an error or this is the outermost transaction, rollback
-	if h.err != nil || h.trCnt == 1 {
+	// Return early if any of the conditions are true
+	if h.tx == nil || h.trCnt == 0 || h.txInstIdx == 0 || len(h.txInst) == 0 {
+		return nil
+	}
+
+	// Handle nested transactions
+	// If the value of the map is zero, we move to the earlier transaction
+	if flag := h.txInst[h.txInstIdx]; flag == 0 {
+		h.txInstIdx--
+		return nil
+	}
+
+	// If the transaction is not the first transaction,
+	// reduce the transaction count and set the current map index value
+	// as processed
+	if h.trCnt > 1 {
+		h.trCnt--
+		h.txInst[h.txInstIdx] = 0 // Mark the current transaction as processed
+		return nil
+	}
+
+	// If this is the outermost transaction, rollback the transaction
+	// If the queries resulted an error, we also roll it back
+	if h.trCnt == 1 || h.err != nil {
 		// Ensure DB, connection, and transaction are valid before rolling back
 		if h.conn == nil {
 			return fmt.Errorf("rollback: %w", dhl.ErrNoConn)
@@ -210,22 +236,6 @@ func (h *PostgreSQLHelper) Rollback() error {
 		h.trCnt = 0
 		h.txInstIdx = 0
 		h.txInst = make(map[uint8]uint8)
-		return nil
-	}
-
-	// Handle nested transactions
-	flag, ok := h.txInst[h.txInstIdx]
-	if !ok || flag == 0 {
-		if ok {
-			h.txInstIdx-- // Move to the previous transaction instance
-		}
-		return nil
-	}
-
-	// Deduct transaction count for nested transactions
-	if h.trCnt > 1 {
-		h.trCnt--
-		h.txInst[h.txInstIdx] = 0 // Mark the current transaction as processed
 		return nil
 	}
 
