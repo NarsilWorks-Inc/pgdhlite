@@ -47,7 +47,7 @@ func (h *PostgreSQLHelper) NewHelper() dhl.DataHelperLite {
 
 // Open a new connection
 func (h *PostgreSQLHelper) Open(ctx context.Context, di *cfg.DatabaseInfo) error {
-	if !(h.conn == nil) {
+	if h.conn != nil {
 		h.rw.Lock()
 		h.reuseCnt++
 		h.rw.Unlock()
