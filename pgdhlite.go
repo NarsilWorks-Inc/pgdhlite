@@ -199,20 +199,23 @@ func (h *PostgreSQLHelper) Rollback() error {
 	h.rw.Lock()
 	defer h.rw.Unlock()
 
-	// Handle nested transactions
-	// If the value of the map is zero, we move to the earlier transaction
-	if flag := h.txInst[h.txInstIdx]; flag == 0 {
-		h.txInstIdx--
-		return nil
-	}
+	// If there is no error, we will resume our regular checking
+	if h.err == nil {
+		// Handle nested transactions
+		// If the value of the map is zero, we move to the earlier transaction
+		if flag := h.txInst[h.txInstIdx]; flag == 0 {
+			h.txInstIdx--
+			return nil
+		}
 
-	// If the transaction is not the first transaction,
-	// reduce the transaction count and set the current map index value
-	// as processed
-	if h.trCnt > 1 {
-		h.trCnt--
-		h.txInst[h.txInstIdx] = 0 // Mark the current transaction as processed
-		return nil
+		// If the transaction is not the first transaction,
+		// reduce the transaction count and set the current map index value
+		// as processed
+		if h.trCnt > 1 {
+			h.trCnt--
+			h.txInst[h.txInstIdx] = 0 // Mark the current transaction as processed
+			return nil
+		}
 	}
 
 	// If this is the outermost transaction, rollback the transaction
