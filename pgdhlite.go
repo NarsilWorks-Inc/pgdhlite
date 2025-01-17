@@ -146,6 +146,11 @@ func (h *PostgreSQLHelper) Commit() error {
 		return nil
 	}
 
+	// If there is an error, we give the control to rollback
+	if h.err != nil {
+		return h.Rollback()
+	}
+
 	h.rw.Lock()
 	defer h.rw.Unlock()
 
@@ -196,52 +201,59 @@ func (h *PostgreSQLHelper) Rollback() error {
 		return nil
 	}
 
-	h.rw.Lock()
-	defer h.rw.Unlock()
+	if h.err != nil {
+		return h.rollbk()
+	}
 
-	// If there is no error, we will resume our regular checking
-	if h.err == nil {
-		// Handle nested transactions
-		// If the value of the map is zero, we move to the earlier transaction
-		if flag := h.txInst[h.txInstIdx]; flag == 0 {
-			h.txInstIdx--
-			return nil
-		}
+	// Handle nested transactions
+	// If the value of the map is zero, we move to the earlier transaction
+	if flag := h.txInst[h.txInstIdx]; flag == 0 {
+		h.txInstIdx--
+		return nil
+	}
 
-		// If the transaction is not the first transaction,
-		// reduce the transaction count and set the current map index value
-		// as processed
-		if h.trCnt > 1 {
-			h.trCnt--
-			h.txInst[h.txInstIdx] = 0 // Mark the current transaction as processed
-			return nil
-		}
+	// If the transaction is not the first transaction,
+	// reduce the transaction count and set the current map index value
+	// as processed
+	if h.trCnt > 1 {
+		h.trCnt--
+		h.txInst[h.txInstIdx] = 0 // Mark the current transaction as processed
+		return nil
 	}
 
 	// If this is the outermost transaction, rollback the transaction
 	// If the queries resulted an error, we also roll it back
-	if h.trCnt == 1 || h.err != nil {
-		// Ensure DB, connection, and transaction are valid before rolling back
-		if h.conn == nil {
-			return fmt.Errorf("rollback: %w", dhl.ErrNoConn)
-		}
-		if h.tx == nil || h.tx.Conn().IsClosed() {
-			return fmt.Errorf("rollback: %w", dhl.ErrNoTx)
-		}
-
-		// Perform rollback
-		if err := h.tx.Rollback(h.ctx); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			return fmt.Errorf("rollback: %w", err)
-		}
-
-		// Reset all transaction state after rollback
-		h.tx = nil
-		h.trCnt = 0
-		h.txInstIdx = 0
-		h.txInst = make(map[uint8]uint8)
-		return nil
+	if h.trCnt == 1 {
+		return h.rollbk()
 	}
 
+	return nil
+}
+
+func (h *PostgreSQLHelper) rollbk() error {
+
+	// Ensure DB, connection, and transaction are valid before rolling back
+	if h.conn == nil {
+		return fmt.Errorf("rollback: %w", dhl.ErrNoConn)
+	}
+	if h.tx == nil || h.tx.Conn().IsClosed() {
+		return fmt.Errorf("rollback: %w", dhl.ErrNoTx)
+	}
+
+	// Perform rollback
+	if err := h.tx.Rollback(h.ctx); err != nil && !errors.Is(err, sql.ErrTxDone) {
+		return fmt.Errorf("rollback: %w", err)
+	}
+
+	// Reset all transaction state after rollback
+	h.rw.Lock()
+	defer h.rw.Unlock()
+
+	h.tx = nil
+	h.trCnt = 0
+	h.txInstIdx = 0
+	h.err = nil
+	h.txInst = make(map[uint8]uint8)
 	return nil
 }
 
