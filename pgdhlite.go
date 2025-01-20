@@ -595,9 +595,11 @@ func (h *PostgreSQLHelper) Exec(sql string, args ...interface{}) (int64, error) 
 	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
 	if h.tx != nil {
 		ct, h.err = h.tx.Exec(h.ctx, sql, args...)
-		if h.err != pgx.ErrTxClosed {
-			h.err = fmt.Errorf("exec: %w", h.err)
-			return 0, h.err
+		if h.err != nil {
+			if !errors.Is(h.err, pgx.ErrTxClosed) {
+				h.err = fmt.Errorf("exec: %w", h.err)
+				return 0, h.err
+			}
 		}
 		return ct.RowsAffected(), nil
 	}
