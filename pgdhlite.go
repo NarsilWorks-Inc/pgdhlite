@@ -66,7 +66,8 @@ func (h *PostgreSQLHelper) Open(ctx context.Context, di *cfg.DatabaseInfo) error
 	var cfg *pgxpool.Config
 	cfg, h.err = pgxpool.ParseConfig(di.ConnectionString)
 	if h.err != nil {
-		return fmt.Errorf("open: %w", h.err)
+		h.err = fmt.Errorf("open: %w", h.err)
+		return h.err
 	}
 
 	if di.MaxOpenConnection != nil {
@@ -80,7 +81,8 @@ func (h *PostgreSQLHelper) Open(ctx context.Context, di *cfg.DatabaseInfo) error
 	}
 	h.conn, h.err = pgxpool.ConnectConfig(ctx, cfg)
 	if h.err != nil {
-		return fmt.Errorf("open: %w", h.err)
+		h.err = fmt.Errorf("open: %w", h.err)
+		return h.err
 	}
 	h.rw.Lock()
 	h.reuseCnt = 0
@@ -120,12 +122,14 @@ func (h *PostgreSQLHelper) Begin() error {
 		return h.err
 	}
 	if h.conn == nil {
-		return dhl.ErrNoConn
+		h.err = fmt.Errorf("begin: %w", dhl.ErrNoConn)
+		return h.err
 	}
 	if h.tx == nil {
 		h.tx, h.err = h.conn.BeginTx(h.ctx, pgx.TxOptions{})
 		if h.err != nil {
-			return fmt.Errorf("begin: %w", h.err)
+			h.err = fmt.Errorf("begin: %w", h.err)
+			return h.err
 		}
 	}
 	// Increment transaction count
@@ -171,16 +175,19 @@ func (h *PostgreSQLHelper) Commit() error {
 
 	// Ensure DB, connection, and transaction are valid before committing
 	if h.conn == nil {
-		return fmt.Errorf("commit: %w", dhl.ErrNoConn)
+		h.err = fmt.Errorf("commit: %w", dhl.ErrNoConn)
+		return h.err
 	}
 	if h.tx == nil || h.tx.Conn().IsClosed() {
-		return fmt.Errorf("commit: %w", dhl.ErrNoTx)
+		h.err = fmt.Errorf("commit: %w", dhl.ErrNoTx)
+		return h.err
 	}
 
 	// Commit the outermost transaction
 	if h.trCnt == 1 {
-		if err := h.tx.Commit(h.ctx); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			return fmt.Errorf("commit: %w", err)
+		if h.err = h.tx.Commit(h.ctx); h.err != nil && !errors.Is(h.err, sql.ErrTxDone) {
+			h.err = fmt.Errorf("commit: %w", h.err)
+			return h.err
 		}
 	}
 
@@ -234,15 +241,17 @@ func (h *PostgreSQLHelper) rollbk() error {
 
 	// Ensure DB, connection, and transaction are valid before rolling back
 	if h.conn == nil {
-		return fmt.Errorf("rollback: %w", dhl.ErrNoConn)
+		h.err = fmt.Errorf("rollback: %w", dhl.ErrNoConn)
+		return h.err
 	}
 	if h.tx == nil || h.tx.Conn().IsClosed() {
-		return fmt.Errorf("rollback: %w", dhl.ErrNoTx)
+		h.err = fmt.Errorf("rollback: %w", dhl.ErrNoTx)
+		return h.err
 	}
 
 	// Perform rollback
-	if err := h.tx.Rollback(h.ctx); err != nil && !errors.Is(err, sql.ErrTxDone) {
-		return fmt.Errorf("rollback: %w", err)
+	if h.err = h.tx.Rollback(h.ctx); h.err != nil && !errors.Is(h.err, sql.ErrTxDone) {
+		h.err = fmt.Errorf("rollback: %w", h.err)
 	}
 
 	// Reset all transaction state after rollback
@@ -263,15 +272,21 @@ func (h *PostgreSQLHelper) Mark(name string) error {
 		return h.err
 	}
 	if h.conn == nil {
-		return fmt.Errorf("mark: %w", dhl.ErrNoConn)
+		h.err = fmt.Errorf("mark: %w", dhl.ErrNoConn)
+		return h.err
 	}
 	if h.tx == nil {
-		return fmt.Errorf("rollback: %w", dhl.ErrNoTx)
+		h.err = fmt.Errorf("mark: %w", dhl.ErrNoTx)
+		return h.err
 	}
 	if h.trCnt > 0 {
 		_, h.err = h.tx.Exec(h.ctx, `SAVEPOINT sp_`+name+`;`)
+		if h.err != nil {
+			h.err = fmt.Errorf("mark: %w", h.err)
+			return h.err
+		}
 	}
-	return fmt.Errorf("mark: %w", h.err)
+	return nil
 }
 
 // Discard a savepoint
@@ -280,15 +295,21 @@ func (h *PostgreSQLHelper) Discard(name string) error {
 		return h.err
 	}
 	if h.conn == nil {
-		return dhl.ErrNoConn
+		h.err = fmt.Errorf("discard: %w", dhl.ErrNoConn)
+		return h.err
 	}
 	if h.tx == nil || h.tx.Conn().IsClosed() {
-		return dhl.ErrNoTx
+		h.err = fmt.Errorf("discard: %w", dhl.ErrNoTx)
+		return h.err
 	}
 	if h.trCnt > 0 {
 		_, h.err = h.tx.Exec(h.ctx, `ROLLBACK TO SAVEPOINT sp_`+name+`;`)
+		if h.err != nil {
+			h.err = fmt.Errorf("discard: %w", h.err)
+			return h.err
+		}
 	}
-	return fmt.Errorf("discard: %w", h.err)
+	return nil
 }
 
 // Save a savepoint
@@ -297,43 +318,48 @@ func (h *PostgreSQLHelper) Save(name string) error {
 		return h.err
 	}
 	if h.conn == nil {
-		return fmt.Errorf("save: %w", dhl.ErrNoConn)
+		h.err = fmt.Errorf("save: %w", dhl.ErrNoConn)
+		return h.err
 	}
 	if h.tx == nil || h.tx.Conn().IsClosed() {
-		return fmt.Errorf("save: %w", dhl.ErrNoTx)
+		h.err = fmt.Errorf("save: %w", dhl.ErrNoTx)
+		return h.err
 	}
 	if h.trCnt > 0 {
 		_, h.err = h.tx.Exec(h.ctx, `RELEASE SAVEPOINT sp_`+name+`;`)
+		if h.err != nil {
+			h.err = fmt.Errorf("save: %w", h.err)
+			return h.err
+		}
 	}
-	return fmt.Errorf("save: %w", h.err)
+	return nil
 }
 
 // Query from PostgreSQL helper
 func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, error) {
 	var (
-		err error
 		sqr pgx.Rows
 	)
 	sql = dhl.ReplaceQueryParamMarker(sql, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
 	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
 	if h.tx != nil {
-		sqr, err = h.tx.Query(h.ctx, sql, args...)
+		sqr, h.err = h.tx.Query(h.ctx, sql, args...)
 	} else {
-		sqr, err = h.conn.Query(h.ctx, sql, args...)
+		sqr, h.err = h.conn.Query(h.ctx, sql, args...)
 	}
-	if err != nil {
-		return h.rws, err
+	if h.err != nil {
+		h.err = fmt.Errorf("query: %w", h.err)
+		return h.rws, h.err
 	}
 	if sqr != nil {
 		h.rws = NewPostgreSQLRows(&sqr)
 	}
-	return h.rws, nil
+	return h.rws, h.err
 }
 
 // QueryArray puts the single column result to an output array
 func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...interface{}) error {
 	var (
-		err error
 		sqr pgx.Rows
 	)
 	switch out.(type) {
@@ -348,12 +374,13 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 	// replace tables meant for interpolation {table} for putting the schema
 	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
 	if h.tx != nil {
-		sqr, err = h.tx.Query(h.ctx, sql, args...)
+		sqr, h.err = h.tx.Query(h.ctx, sql, args...)
 	} else {
-		sqr, err = h.conn.Query(h.ctx, sql, args...)
+		sqr, h.err = h.conn.Query(h.ctx, sql, args...)
 	}
-	if err != nil {
-		return err
+	if h.err != nil {
+		h.err = fmt.Errorf("queryarray: %w", h.err)
+		return h.err
 	}
 	defer sqr.Close()
 
@@ -366,13 +393,15 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 			}
 			for sqr.Next() {
 				*t = append(*t, "")
-				if err = sqr.Scan(&(*t)[idx]); err != nil {
-					return err
+				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+					h.err = fmt.Errorf("queryarray: %w", h.err)
+					return h.err
 				}
 				idx++
 			}
-			if err = sqr.Err(); err != nil {
-				return err
+			if h.err = sqr.Err(); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
 			}
 			_ = t
 		case *[]int:
@@ -382,13 +411,15 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 			}
 			for sqr.Next() {
 				*t = append(*t, 0)
-				if err = sqr.Scan(&(*t)[idx]); err != nil {
-					return err
+				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+					h.err = fmt.Errorf("queryarray: %w", h.err)
+					return h.err
 				}
 				idx++
 			}
-			if err = sqr.Err(); err != nil {
-				return err
+			if h.err = sqr.Err(); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
 			}
 			_ = t
 		case *[]int8:
@@ -398,13 +429,15 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 			}
 			for sqr.Next() {
 				*t = append(*t, 0)
-				if err = sqr.Scan(&(*t)[idx]); err != nil {
-					return err
+				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+					h.err = fmt.Errorf("queryarray: %w", h.err)
+					return h.err
 				}
 				idx++
 			}
-			if err = sqr.Err(); err != nil {
-				return err
+			if h.err = sqr.Err(); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
 			}
 			_ = t
 		case *[]int16:
@@ -414,13 +447,15 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 			}
 			for sqr.Next() {
 				*t = append(*t, 0)
-				if err = sqr.Scan(&(*t)[idx]); err != nil {
-					return err
+				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+					h.err = fmt.Errorf("queryarray: %w", h.err)
+					return h.err
 				}
 				idx++
 			}
-			if err = sqr.Err(); err != nil {
-				return err
+			if h.err = sqr.Err(); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
 			}
 			_ = t
 		case *[]int32:
@@ -430,13 +465,15 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 			}
 			for sqr.Next() {
 				*t = append(*t, 0)
-				if err = sqr.Scan(&(*t)[idx]); err != nil {
-					return err
+				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+					h.err = fmt.Errorf("queryarray: %w", h.err)
+					return h.err
 				}
 				idx++
 			}
-			if err = sqr.Err(); err != nil {
-				return err
+			if h.err = sqr.Err(); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
 			}
 			_ = t
 		case *[]int64:
@@ -446,13 +483,15 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 			}
 			for sqr.Next() {
 				*t = append(*t, 0)
-				if err = sqr.Scan(&(*t)[idx]); err != nil {
-					return err
+				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+					h.err = fmt.Errorf("queryarray: %w", h.err)
+					return h.err
 				}
 				idx++
 			}
-			if err = sqr.Err(); err != nil {
-				return err
+			if h.err = sqr.Err(); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
 			}
 			_ = t
 		case *[]bool:
@@ -462,13 +501,15 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 			}
 			for sqr.Next() {
 				*t = append(*t, false)
-				if err = sqr.Scan(&(*t)[idx]); err != nil {
-					return err
+				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+					h.err = fmt.Errorf("queryarray: %w", h.err)
+					return h.err
 				}
 				idx++
 			}
-			if err = sqr.Err(); err != nil {
-				return err
+			if h.err = sqr.Err(); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
 			}
 			_ = t
 		case *[]float32:
@@ -478,13 +519,15 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 			}
 			for sqr.Next() {
 				*t = append(*t, 0)
-				if err = sqr.Scan(&(*t)[idx]); err != nil {
-					return err
+				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+					h.err = fmt.Errorf("queryarray: %w", h.err)
+					return h.err
 				}
 				idx++
 			}
-			if err = sqr.Err(); err != nil {
-				return err
+			if h.err = sqr.Err(); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
 			}
 			_ = t
 		case *[]float64:
@@ -494,13 +537,15 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 			}
 			for sqr.Next() {
 				*t = append(*t, 0)
-				if err = sqr.Scan(&(*t)[idx]); err != nil {
-					return err
+				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+					h.err = fmt.Errorf("queryarray: %w", h.err)
+					return h.err
 				}
 				idx++
 			}
-			if err = sqr.Err(); err != nil {
-				return err
+			if h.err = sqr.Err(); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
 			}
 			_ = t
 		case *[]time.Time:
@@ -510,13 +555,15 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 			}
 			for sqr.Next() {
 				*t = append(*t, time.Time{})
-				if err = sqr.Scan(&(*t)[idx]); err != nil {
-					return err
+				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+					h.err = fmt.Errorf("queryarray: %w", h.err)
+					return h.err
 				}
 				idx++
 			}
-			if err = sqr.Err(); err != nil {
-				return err
+			if h.err = sqr.Err(); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
 			}
 			_ = t
 		}
@@ -540,26 +587,25 @@ func (h *PostgreSQLHelper) QueryRow(sql string, args ...interface{}) dhl.Row {
 func (h *PostgreSQLHelper) Exec(sql string, args ...interface{}) (int64, error) {
 
 	var (
-		err error
-		ct  pgconn.CommandTag
+		ct pgconn.CommandTag
 	)
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	sql = dhl.ReplaceQueryParamMarker(sql, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
 	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
 	if h.tx != nil {
-		ct, err = h.tx.Exec(h.ctx, sql, args...)
-		if err == nil {
-			return ct.RowsAffected(), nil
+		ct, h.err = h.tx.Exec(h.ctx, sql, args...)
+		if h.err != pgx.ErrTxClosed {
+			h.err = fmt.Errorf("exec: %w", h.err)
+			return 0, h.err
 		}
-		if err != pgx.ErrTxClosed {
-			return 0, err
-		}
+		return ct.RowsAffected(), nil
 	}
 
-	ct, err = h.conn.Exec(h.ctx, sql, args...)
-	if err != nil {
-		return 0, err
+	ct, h.err = h.conn.Exec(h.ctx, sql, args...)
+	if h.err != nil {
+		h.err = fmt.Errorf("exec: %w", h.err)
+		return 0, h.err
 	}
 
 	return ct.RowsAffected(), nil
@@ -569,7 +615,6 @@ func (h *PostgreSQLHelper) Exec(sql string, args ...interface{}) (int64, error) 
 func (h *PostgreSQLHelper) Exists(sqlwparams string, args ...interface{}) (bool, error) {
 
 	var (
-		err    error
 		exists bool
 		sql    string
 	)
@@ -583,22 +628,26 @@ func (h *PostgreSQLHelper) Exists(sqlwparams string, args ...interface{}) (bool,
 
 	sql = `SELECT EXISTS (SELECT 1 FROM ` + sqlwparams + `);`
 	if h.tx != nil {
-		err = h.tx.QueryRow(h.ctx, sql, args...).Scan(&exists)
-		if errors.Is(err, dhl.ErrNoRows) {
-			return false, nil
+		h.err = h.tx.QueryRow(h.ctx, sql, args...).Scan(&exists)
+		if errors.Is(h.err, dhl.ErrNoRows) {
+			h.err = nil
+			return false, h.err
 		}
-		if err != nil {
-			return false, err
+		if h.err != nil {
+			h.err = fmt.Errorf("exists: %w", h.err)
+			return false, h.err
 		}
-		return exists, nil
+		return exists, h.err
 	}
 
-	err = h.conn.QueryRow(h.ctx, sql, args...).Scan(&exists)
-	if errors.Is(err, dhl.ErrNoRows) {
-		return false, nil
+	h.err = h.conn.QueryRow(h.ctx, sql, args...).Scan(&exists)
+	if errors.Is(h.err, dhl.ErrNoRows) {
+		h.err = nil
+		return false, h.err
 	}
-	if err != nil {
-		return false, err
+	if h.err != nil {
+		h.err = fmt.Errorf("exists: %w", h.err)
+		return false, h.err
 	}
 	return exists, nil
 }
@@ -607,7 +656,6 @@ func (h *PostgreSQLHelper) Exists(sqlwparams string, args ...interface{}) (bool,
 func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 
 	var (
-		err  error
 		sql  string
 		affr int64
 	)
@@ -632,8 +680,9 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		affr = 1
 		if sg.UpsertQuery != "" {
 			sql = strings.ReplaceAll(sg.UpsertQuery, sg.NamePlaceHolder, serial)
-			if affr, err = h.Exec(sql); err != nil {
-				return err
+			if affr, h.err = h.Exec(sql); h.err != nil {
+				h.err = fmt.Errorf("next: %w", h.err)
+				return h.err
 			}
 		}
 		// in the event that the upsert alters the affr variable to 0, we return an error
@@ -642,8 +691,9 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		}
 		// result query needs a single scalar value to be returned
 		sql = strings.ReplaceAll(sg.ResultQuery, sg.NamePlaceHolder, serial)
-		if err = h.QueryRow(sql).Scan(next); err != nil {
-			return err
+		if h.err = h.QueryRow(sql).Scan(next); h.err != nil {
+			h.err = fmt.Errorf("next: %w", h.err)
+			return h.err
 		}
 		return nil
 	}
@@ -672,23 +722,27 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 	// Get next value of the sequence
 	sql = fmt.Sprintf("SELECT nextval('%s');", h.Escape(sch+"."+sln))
 	if h.tx != nil {
-		_, err = h.tx.Exec(h.ctx, seq)
-		if err != nil {
-			return err
+		_, h.err = h.tx.Exec(h.ctx, seq)
+		if h.err != nil {
+			h.err = fmt.Errorf("next: %w", h.err)
+			return h.err
 		}
-		err = h.tx.QueryRow(h.ctx, sql).Scan(next)
-		if err != nil {
-			return err
+		h.err = h.tx.QueryRow(h.ctx, sql).Scan(next)
+		if h.err != nil {
+			h.err = fmt.Errorf("next: %w", h.err)
+			return h.err
 		}
 		return nil
 	}
-	_, err = h.tx.Exec(h.ctx, seq)
-	if err != nil {
-		return err
+	_, h.err = h.tx.Exec(h.ctx, seq)
+	if h.err != nil {
+		h.err = fmt.Errorf("next: %w", h.err)
+		return h.err
 	}
-	err = h.conn.QueryRow(h.ctx, sql).Scan(next)
-	if err != nil {
-		return err
+	h.err = h.conn.QueryRow(h.ctx, sql).Scan(next)
+	if h.err != nil {
+		h.err = fmt.Errorf("next: %w", h.err)
+		return h.err
 	}
 	return nil
 }
@@ -725,7 +779,6 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 	var (
 		sql    string
 		exists bool
-		err    error
 	)
 
 	tableNameWithParameters = strings.TrimSpace(tableNameWithParameters)
@@ -733,12 +786,14 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 		return false, errors.New(`semicolons are not allowed at the end of this query`)
 	}
 	sql = dhl.InterpolateTable(`SELECT EXISTS (SELECT 1 FROM `+tableNameWithParameters+`);`, h.dbi.Schema)
-	err = h.QueryRow(sql, args...).Scan(&exists)
-	if err != nil {
-		if !errors.Is(err, dhl.ErrNoRows) {
-			return false, err
+	h.err = h.QueryRow(sql, args...).Scan(&exists)
+	if h.err != nil {
+		if !errors.Is(h.err, dhl.ErrNoRows) {
+			h.err = fmt.Errorf("verifywithin: %w", h.err)
+			return false, h.err
 		}
-		return false, nil
+		h.err = nil
+		return false, h.err
 	}
 
 	return exists, nil
@@ -763,12 +818,11 @@ func (h *PostgreSQLHelper) Escape(fv string) string {
 // DatabaseVersion returns database version
 func (h *PostgreSQLHelper) DatabaseVersion() string {
 	var (
-		err     error
 		version string
 	)
-	err = h.QueryRow(`SELECT version();`).Scan(&version)
-	if err != nil {
-		version = err.Error()
+	h.err = h.QueryRow(`SELECT version();`).Scan(&version)
+	if h.err != nil {
+		version = h.err.Error()
 	}
 	return version
 }
@@ -776,9 +830,10 @@ func (h *PostgreSQLHelper) DatabaseVersion() string {
 // Now gets the current server date
 func (h *PostgreSQLHelper) Now() *time.Time {
 	var tm time.Time
-	err := h.QueryRow(`SELECT NOW();`).Scan(&tm)
-	if err != nil {
+	h.err = h.QueryRow(`SELECT NOW();`).Scan(&tm)
+	if h.err != nil {
 		tm = time.Now()
+		h.err = nil
 		return &tm
 	}
 	return &tm
@@ -787,9 +842,10 @@ func (h *PostgreSQLHelper) Now() *time.Time {
 // NowUTC gets the current server date in UTC
 func (h *PostgreSQLHelper) NowUTC() *time.Time {
 	var tm time.Time
-	err := h.QueryRow(`SELECT timezone('UTC',CURRENT_TIMESTAMP);`).Scan(&tm)
-	if err != nil {
+	h.err = h.QueryRow(`SELECT timezone('UTC',CURRENT_TIMESTAMP);`).Scan(&tm)
+	if h.err != nil {
 		tm = time.Now().UTC()
+		h.err = nil
 		return &tm
 	}
 	return &tm
