@@ -340,6 +340,13 @@ func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, err
 	var (
 		sqr pgx.Rows
 	)
+	if h.err != nil {
+		return nil, h.err
+	}
+	if h.conn == nil {
+		h.err = fmt.Errorf("query: %w", dhl.ErrNoConn)
+		return nil, h.err
+	}
 	sql = dhl.ReplaceQueryParamMarker(sql, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
 	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
 	if h.tx != nil {
@@ -351,9 +358,12 @@ func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, err
 		h.err = fmt.Errorf("query: %w", h.err)
 		return h.rws, h.err
 	}
-	if sqr != nil {
-		h.rws = NewPostgreSQLRows(&sqr)
+	if sqr == nil {
+		h.err = fmt.Errorf("query: %w", dhl.ErrNoConn)
+		return nil, h.err
 	}
+
+	h.rws = NewPostgreSQLRows(&sqr)
 	return h.rws, h.err
 }
 
@@ -362,6 +372,9 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 	var (
 		sqr pgx.Rows
 	)
+	if h.err != nil {
+		return h.err
+	}
 	switch out.(type) {
 	case *[]string, *[]int, *[]int8, *[]int16, *[]int32, *[]int64, *[]bool, *[]float32, *[]float64:
 	case *[]time.Time:
@@ -668,12 +681,14 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 	sg := h.dbi.SequenceGenerator
 	if sg != nil {
 		if sg.NamePlaceHolder == "" {
-			return errors.New(`name place holder should be provided. ` +
+			h.err = errors.New(`name place holder should be provided. ` +
 				`Set name place holder in {placeholder} format. ` +
 				`Place holder name should also be present in the upsert or select query`)
+			return h.err
 		}
 		if sg.ResultQuery == "" {
-			return errors.New(`nesult query must be provided`)
+			h.err = errors.New(`nesult query must be provided`)
+			return h.err
 		}
 
 		// Upsert is usually an insert or an update, so we execute it.
@@ -689,7 +704,8 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		}
 		// in the event that the upsert alters the affr variable to 0, we return an error
 		if affr == 0 {
-			return errors.New(`upsert query did not insert or update any records`)
+			h.err = errors.New(`upsert query did not insert or update any records`)
+			return h.err
 		}
 		// result query needs a single scalar value to be returned
 		sql = strings.ReplaceAll(sg.ResultQuery, sg.NamePlaceHolder, serial)
@@ -825,6 +841,7 @@ func (h *PostgreSQLHelper) DatabaseVersion() string {
 	h.err = h.QueryRow(`SELECT version();`).Scan(&version)
 	if h.err != nil {
 		version = h.err.Error()
+		h.err = nil
 	}
 	return version
 }
