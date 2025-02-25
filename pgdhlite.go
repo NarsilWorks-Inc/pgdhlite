@@ -769,7 +769,7 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExpression) (Valid bool, Error error) {
 	tableNameWithParameters := tableName
 
-	args := make([]interface{}, len(values))
+	args := make([]any, 0)
 	i := 0
 	andstr := ""
 	placeholder := h.dbi.ParameterPlaceholder
@@ -778,19 +778,20 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 	}
 
 	for _, v := range values {
-		if h.dbi.ParameterInSequence {
-			placeholder = h.dbi.ParameterPlaceholder + strconv.Itoa(i+1)
-		}
-		// If there is no operator, we default to "="
-		if v.Operator == "" {
-			v.Operator = "="
-		}
 		if isInterfaceNil(v.Value) {
-			v.Operator = " IS "
+			v.Operator = " IS NULL"
+		} else {
+			// If there is no operator, we default to "="
+			if v.Operator == "" {
+				v.Operator = "="
+			}
+			if h.dbi.ParameterInSequence {
+				placeholder = h.dbi.ParameterPlaceholder + strconv.Itoa(i+1)
+			}
+			i++
 		}
 		tableNameWithParameters += andstr + v.Name + v.Operator + placeholder
-		args[i] = v.Value
-		i++
+		args = append(args, v.Value)
 		andstr = " AND "
 	}
 
