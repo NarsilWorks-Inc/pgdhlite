@@ -206,3 +206,20 @@ func prepareDest(dest []interface{}) (destq []interface{}) {
 
 	return
 }
+
+// isInterfaceNil checks if an interface is nil
+func isInterfaceNil(i interface{}) bool {
+	if i == nil {
+		return true
+	}
+	iv := reflect.ValueOf(i)
+	if !iv.IsValid() {
+		return true
+	}
+	switch iv.Kind() {
+	case reflect.Ptr, reflect.Slice, reflect.Map, reflect.Func, reflect.Interface:
+		return iv.IsNil()
+	default:
+		return false
+	}
+}

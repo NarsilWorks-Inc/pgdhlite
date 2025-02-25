@@ -785,7 +785,7 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 		if v.Operator == "" {
 			v.Operator = "="
 		}
-		if v.Value == nil {
+		if isInterfaceNil(v.Value) {
 			v.Operator = " IS "
 		}
 		tableNameWithParameters += andstr + v.Name + v.Operator + placeholder
