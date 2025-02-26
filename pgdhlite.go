@@ -780,6 +780,7 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 	for _, v := range values {
 		if isInterfaceNil(v.Value) {
 			v.Operator = " IS NULL"
+			placeholder = ""
 		} else {
 			// If there is no operator, we default to "="
 			if v.Operator == "" {
