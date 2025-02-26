@@ -789,10 +789,10 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 			if h.dbi.ParameterInSequence {
 				placeholder = h.dbi.ParameterPlaceholder + strconv.Itoa(i+1)
 			}
+			args = append(args, v.Value)
 			i++
 		}
 		tableNameWithParameters += andstr + v.Name + v.Operator + placeholder
-		args = append(args, v.Value)
 		andstr = " AND "
 	}
 
