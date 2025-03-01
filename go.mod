@@ -5,9 +5,9 @@ go 1.23.0
 toolchain go1.24.0
 
 require (
-	github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20250301054213-e2d79e5f03e9
+	github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20250301085248-20a5dc8d428b
 	github.com/eaglebush/config v0.0.0-20241112071821-d764539c5f47
-	github.com/eaglebush/datainfo v0.0.0-20250301053747-213924b75248
+	github.com/eaglebush/datainfo v0.0.0-20250301085159-138389cbb07f
 	github.com/jackc/pgconn v1.14.3
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/shopspring/decimal v1.4.0
