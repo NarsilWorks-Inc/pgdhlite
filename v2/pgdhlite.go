@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	cdn "github.com/NarsilWorks-Inc/cmndatainfo"
 	dhl "github.com/NarsilWorks-Inc/datahelperlite/v2"
+	dn "github.com/eaglebush/datainfo"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -20,7 +20,7 @@ import (
 // PostgreSQLHelper implements DataHelperLite
 type PostgreSQLHelper struct {
 	conn *pgxpool.Pool
-	dbi  *cdn.CommonDataInfo
+	dbi  *dn.DataInfo
 	ctx  context.Context
 	tx   pgx.Tx
 	rws  dhl.Rows
@@ -46,7 +46,7 @@ func (h *PostgreSQLHelper) NewHelper() dhl.DataHelperLite {
 }
 
 // Open a new connection
-func (h *PostgreSQLHelper) Open(ctx context.Context, di *cdn.CommonDataInfo) error {
+func (h *PostgreSQLHelper) Open(ctx context.Context, di *dn.DataInfo) error {
 	if h.conn != nil {
 		h.rw.Lock()
 		h.reuseCnt++
