@@ -339,10 +339,7 @@ func (h *PostgreSQLHelper) Save(name string) error {
 }
 
 // Query from PostgreSQL helper
-func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, error) {
-	var (
-		sqr pgx.Rows
-	)
+func (h *PostgreSQLHelper) Query(sql string, args ...any) (dhl.Rows, error) {
 	if h.err != nil {
 		return nil, h.err
 	}
@@ -351,19 +348,26 @@ func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, err
 		return nil, h.err
 	}
 
-	if h.dbi.ParameterInSequence == nil {
-		h.dbi.ParameterInSequence = new(bool)
+	var (
+		sqr pgx.Rows
+		placeholder,
+		schema string
+		paraminseq bool
+	)
+
+	placeholder = "?"
+	if h.dbi.ParameterPlaceHolder != nil && *h.dbi.ParameterPlaceHolder != "" {
+		placeholder = *h.dbi.ParameterPlaceHolder
 	}
-	if h.dbi.ParameterPlaceHolder == nil {
-		h.dbi.ParameterPlaceHolder = new(string)
-		*h.dbi.ParameterPlaceHolder = "?"
+	if h.dbi.ParameterInSequence != nil {
+		paraminseq = *h.dbi.ParameterInSequence
 	}
-	if h.dbi.Schema == nil {
-		h.dbi.Schema = new(string)
+	if h.dbi.Schema != nil && *h.dbi.Schema != "" {
+		schema = *h.dbi.Schema
 	}
 
-	sql = dhl.ReplaceQueryParamMarker(sql, *h.dbi.ParameterInSequence, *h.dbi.ParameterPlaceHolder)
-	sql = dhl.InterpolateTable(sql, *h.dbi.Schema)
+	sql = dhl.ReplaceQueryParamMarker(sql, paraminseq, placeholder)
+	sql = dhl.InterpolateTable(sql, schema)
 	if h.tx != nil {
 		sqr, h.err = h.tx.Query(h.ctx, sql, args...)
 	} else {
@@ -383,7 +387,7 @@ func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, err
 }
 
 // QueryArray puts the single column result to an output array
-func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...interface{}) error {
+func (h *PostgreSQLHelper) QueryArray(sql string, out any, args ...any) error {
 	var (
 		sqr pgx.Rows
 		placeholder,
@@ -391,6 +395,7 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 		paraminseq bool
 	)
 
+	placeholder = "?"
 	if h.dbi.ParameterPlaceHolder != nil && *h.dbi.ParameterPlaceHolder != "" {
 		placeholder = *h.dbi.ParameterPlaceHolder
 	}
@@ -621,6 +626,7 @@ func (h *PostgreSQLHelper) QueryRow(sql string, args ...interface{}) dhl.Row {
 		paraminseq bool
 	)
 
+	placeholder = "?"
 	if h.dbi.ParameterPlaceHolder != nil && *h.dbi.ParameterPlaceHolder != "" {
 		placeholder = *h.dbi.ParameterPlaceHolder
 	}
@@ -651,6 +657,7 @@ func (h *PostgreSQLHelper) Exec(sql string, args ...interface{}) (int64, error) 
 		paraminseq bool
 	)
 
+	placeholder = "?"
 	if h.dbi.ParameterPlaceHolder != nil && *h.dbi.ParameterPlaceHolder != "" {
 		placeholder = *h.dbi.ParameterPlaceHolder
 	}
@@ -694,6 +701,7 @@ func (h *PostgreSQLHelper) Exists(sqlwparams string, args ...interface{}) (bool,
 		paraminseq, exists bool
 	)
 
+	placeholder = "?"
 	if h.dbi.ParameterPlaceHolder != nil && *h.dbi.ParameterPlaceHolder != "" {
 		placeholder = *h.dbi.ParameterPlaceHolder
 	}
@@ -838,15 +846,16 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 // VerifyWithin a set of validation expression against the underlying database table
 func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExpression) (Valid bool, Error error) {
 	var (
-		andstr,
+		andstr, sql,
 		placeholder,
 		schema, ph string
-		paraminseq bool
-		i          int
+		paraminseq, exists bool
+		i                  int
 	)
 
 	args := make([]any, 0)
 
+	placeholder = "?"
 	if h.dbi.ParameterPlaceHolder != nil && *h.dbi.ParameterPlaceHolder != "" {
 		placeholder = *h.dbi.ParameterPlaceHolder
 	}
@@ -880,11 +889,6 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 		andstr = " AND "
 	}
 
-	var (
-		sql    string
-		exists bool
-	)
-
 	tableNameWithParameters = strings.TrimSpace(tableNameWithParameters)
 	if strings.HasSuffix(tableNameWithParameters, `;`) {
 		return false, errors.New(`semicolons are not allowed at the end of this query`)
@@ -908,13 +912,13 @@ func (h *PostgreSQLHelper) Escape(fv string) string {
 	if len(fv) == 0 {
 		return ""
 	}
-	senc := *h.dbi.StringEnclosingChar
-	sesc := *h.dbi.StringEscapeChar
-	if len(senc) == 0 {
-		senc = `'`
+	senc := `'`
+	sesc := `\`
+	if h.dbi.StringEnclosingChar != nil && *h.dbi.StringEnclosingChar != "" {
+		senc = *h.dbi.StringEnclosingChar
 	}
-	if len(sesc) == 0 {
-		sesc = `'`
+	if h.dbi.StringEscapeChar != nil && *h.dbi.StringEscapeChar != "" {
+		sesc = *h.dbi.StringEscapeChar
 	}
 	return strings.ReplaceAll(fv, senc, sesc+sesc)
 }
