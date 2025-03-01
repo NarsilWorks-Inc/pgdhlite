@@ -1,7 +1,9 @@
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/Masterminds/semver/v3 v3.1.1/go.mod h1:VPu/7SZ7ePZ3QOrcuXROw5FAcLl4a0cBrbBpGY/8hQs=
-github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20241218143223-6f2d4b5bf352 h1:LhNvwQzvRNh/2KcH2XOHSSCRWZGncWLNqGcy8SeAU7o=
-github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20241218143223-6f2d4b5bf352/go.mod h1:MHnwuW54xd3xlxF2/IbKvCWj3Zuj6ihWYYH12ffJI1Q=
+github.com/NarsilWorks-Inc/cmndatainfo v0.0.0-20250301043904-762b16aad448 h1:o6eoGUSUIM2OGMkmyfkatfyP2IqI2SwfrxrIvrZ+eUs=
+github.com/NarsilWorks-Inc/cmndatainfo v0.0.0-20250301043904-762b16aad448/go.mod h1:g3zGVMUVLsVXV64+SaSvv6qD/hnD410VIchfjWZjC7k=
+github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20250301044115-1a24542a1fd3 h1:PMxmMAue5BI5JNPT7H59pxrPyGa9FiRVhjUEFche8Oo=
+github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20250301044115-1a24542a1fd3/go.mod h1:lc3B8nkIDOMucsLbNNdqHpFRiPUUPNOjzjyIArlJtMo=
 github.com/cockroachdb/apd v1.1.0 h1:3LFP3629v+1aKXU5Q37mxmRxX/pIu1nijXydLShEq5I=
 github.com/cockroachdb/apd v1.1.0/go.mod h1:8Sl8LxpKi29FqWXR16WEFZRNSz3SoPzUzeMeY4+DwBQ=
 github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=

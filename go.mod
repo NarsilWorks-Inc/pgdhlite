@@ -3,7 +3,7 @@ module github.com/NarsilWorks-Inc/pgdhlite
 go 1.19
 
 require (
-	github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20241218143223-6f2d4b5bf352
+	github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20250301044115-1a24542a1fd3
 	github.com/eaglebush/config v0.0.0-20241112071821-d764539c5f47
 	github.com/jackc/pgconn v1.14.3
 	github.com/jackc/pgx/v4 v4.18.3
@@ -11,6 +11,7 @@ require (
 )
 
 require (
+	github.com/NarsilWorks-Inc/cmndatainfo v0.0.0-20250301043904-762b16aad448
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
