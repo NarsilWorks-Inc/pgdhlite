@@ -793,12 +793,27 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 
 // VerifyWithin a set of validation expression against the underlying database table
 func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExpression) (Valid bool, Error error) {
-	tableNameWithParameters := tableName
 
+	if h.err != nil {
+		return false, h.err
+	}
+	if h.conn == nil {
+		return false, fmt.Errorf("verify: %w", dhl.ErrNoConn)
+	}
+
+	var (
+		i int
+		andstr,
+		placeholder,
+		ph string
+	)
+
+	tableNameWithParameters := tableName
 	args := make([]any, 0)
-	i := 0
-	andstr := ""
-	placeholder := h.dbi.ParameterPlaceholder
+	placeholder = "?"
+	if h.dbi.ParameterPlaceholder != "" {
+		placeholder = h.dbi.ParameterPlaceholder
+	}
 	if len(values) > 0 {
 		tableNameWithParameters += ` WHERE `
 	}
@@ -806,19 +821,19 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 	for _, v := range values {
 		if isInterfaceNil(v.Value) {
 			v.Operator = " IS NULL"
-			placeholder = ""
+			ph = ""
 		} else {
 			// If there is no operator, we default to "="
 			if v.Operator == "" {
 				v.Operator = "="
 			}
 			if h.dbi.ParameterInSequence {
-				placeholder = h.dbi.ParameterPlaceholder + strconv.Itoa(i+1)
+				ph = placeholder + strconv.Itoa(i+1)
 			}
 			args = append(args, v.Value)
 			i++
 		}
-		tableNameWithParameters += andstr + v.Name + v.Operator + placeholder
+		tableNameWithParameters += andstr + v.Name + v.Operator + ph
 		andstr = " AND "
 	}
 
