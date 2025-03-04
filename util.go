@@ -11,7 +11,7 @@ import (
 	ssd "github.com/shopspring/decimal"
 )
 
-func copyScannedToDest(dest, src []interface{}) error {
+func copyScannedToDest(dest, src []any) error {
 
 	for i, d := range src {
 		switch x := d.(type) {
@@ -154,7 +154,7 @@ func copyScannedToDest(dest, src []interface{}) error {
 				*s = string(([]byte)(*x))
 			case **string:
 				**s = string(([]byte)(*x))
-			case interface{}:
+			case any:
 				xs := string(([]byte)(*x))
 				s = &xs
 			default:
@@ -168,10 +168,10 @@ func copyScannedToDest(dest, src []interface{}) error {
 	return nil
 }
 
-func prepareDest(dest []interface{}) (destq []interface{}) {
+func prepareDest(dest []any) (destq []any) {
 
 	// create nullable sql destinations
-	destq = make([]interface{}, len(dest))
+	destq = make([]any, len(dest))
 
 	// return values
 	for i, d := range dest {
@@ -197,7 +197,7 @@ func prepareDest(dest []interface{}) (destq []interface{}) {
 			destq[i] = &ssd.NullDecimal{}
 		case *uint8, **uint8:
 			destq[i] = &sql.NullByte{}
-		case interface{}, *interface{}:
+		case any, *any:
 			destq[i] = &sql.RawBytes{}
 		default:
 			log.Fatal("Unhandled data type: " + reflect.TypeOf(x).Name())
@@ -208,7 +208,7 @@ func prepareDest(dest []interface{}) (destq []interface{}) {
 }
 
 // isInterfaceNil checks if an interface is nil
-func isInterfaceNil(i interface{}) bool {
+func isInterfaceNil(i any) bool {
 	if i == nil {
 		return true
 	}

@@ -336,7 +336,7 @@ func (h *PostgreSQLHelper) Save(name string) error {
 }
 
 // Query from PostgreSQL helper
-func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, error) {
+func (h *PostgreSQLHelper) Query(sql string, args ...any) (dhl.Rows, error) {
 	var (
 		sqr pgx.Rows
 	)
@@ -368,7 +368,7 @@ func (h *PostgreSQLHelper) Query(sql string, args ...interface{}) (dhl.Rows, err
 }
 
 // QueryArray puts the single column result to an output array
-func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...interface{}) error {
+func (h *PostgreSQLHelper) QueryArray(sql string, out any, args ...any) error {
 	var (
 		sqr pgx.Rows
 	)
@@ -395,197 +395,209 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out interface{}, args ...inter
 		h.err = fmt.Errorf("queryarray: %w", h.err)
 		return h.err
 	}
+	if sqr == nil {
+		h.err = fmt.Errorf("queryarray: %w", dhl.ErrNoConn)
+		return h.err
+	}
+
 	defer sqr.Close()
 
-	if sqr != nil {
-		switch t := out.(type) {
-		case *[]string:
-			idx := 0
-			if t == nil {
-				t = new([]string)
-			}
-			for sqr.Next() {
-				*t = append(*t, "")
-				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
-					h.err = fmt.Errorf("queryarray: %w", h.err)
-					return h.err
-				}
-				idx++
-			}
-			if h.err = sqr.Err(); h.err != nil {
-				h.err = fmt.Errorf("queryarray: %w", h.err)
-				return h.err
-			}
-			_ = t
-		case *[]int:
-			idx := 0
-			if t == nil {
-				t = new([]int)
-			}
-			for sqr.Next() {
-				*t = append(*t, 0)
-				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
-					h.err = fmt.Errorf("queryarray: %w", h.err)
-					return h.err
-				}
-				idx++
-			}
-			if h.err = sqr.Err(); h.err != nil {
-				h.err = fmt.Errorf("queryarray: %w", h.err)
-				return h.err
-			}
-			_ = t
-		case *[]int8:
-			idx := 0
-			if t == nil {
-				t = new([]int8)
-			}
-			for sqr.Next() {
-				*t = append(*t, 0)
-				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
-					h.err = fmt.Errorf("queryarray: %w", h.err)
-					return h.err
-				}
-				idx++
-			}
-			if h.err = sqr.Err(); h.err != nil {
-				h.err = fmt.Errorf("queryarray: %w", h.err)
-				return h.err
-			}
-			_ = t
-		case *[]int16:
-			idx := 0
-			if t == nil {
-				t = new([]int16)
-			}
-			for sqr.Next() {
-				*t = append(*t, 0)
-				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
-					h.err = fmt.Errorf("queryarray: %w", h.err)
-					return h.err
-				}
-				idx++
-			}
-			if h.err = sqr.Err(); h.err != nil {
-				h.err = fmt.Errorf("queryarray: %w", h.err)
-				return h.err
-			}
-			_ = t
-		case *[]int32:
-			idx := 0
-			if t == nil {
-				t = new([]int32)
-			}
-			for sqr.Next() {
-				*t = append(*t, 0)
-				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
-					h.err = fmt.Errorf("queryarray: %w", h.err)
-					return h.err
-				}
-				idx++
-			}
-			if h.err = sqr.Err(); h.err != nil {
-				h.err = fmt.Errorf("queryarray: %w", h.err)
-				return h.err
-			}
-			_ = t
-		case *[]int64:
-			idx := 0
-			if t == nil {
-				t = new([]int64)
-			}
-			for sqr.Next() {
-				*t = append(*t, 0)
-				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
-					h.err = fmt.Errorf("queryarray: %w", h.err)
-					return h.err
-				}
-				idx++
-			}
-			if h.err = sqr.Err(); h.err != nil {
-				h.err = fmt.Errorf("queryarray: %w", h.err)
-				return h.err
-			}
-			_ = t
-		case *[]bool:
-			idx := 0
-			if t == nil {
-				t = new([]bool)
-			}
-			for sqr.Next() {
-				*t = append(*t, false)
-				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
-					h.err = fmt.Errorf("queryarray: %w", h.err)
-					return h.err
-				}
-				idx++
-			}
-			if h.err = sqr.Err(); h.err != nil {
-				h.err = fmt.Errorf("queryarray: %w", h.err)
-				return h.err
-			}
-			_ = t
-		case *[]float32:
-			idx := 0
-			if t == nil {
-				t = new([]float32)
-			}
-			for sqr.Next() {
-				*t = append(*t, 0)
-				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
-					h.err = fmt.Errorf("queryarray: %w", h.err)
-					return h.err
-				}
-				idx++
-			}
-			if h.err = sqr.Err(); h.err != nil {
-				h.err = fmt.Errorf("queryarray: %w", h.err)
-				return h.err
-			}
-			_ = t
-		case *[]float64:
-			idx := 0
-			if t == nil {
-				t = new([]float64)
-			}
-			for sqr.Next() {
-				*t = append(*t, 0)
-				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
-					h.err = fmt.Errorf("queryarray: %w", h.err)
-					return h.err
-				}
-				idx++
-			}
-			if h.err = sqr.Err(); h.err != nil {
-				h.err = fmt.Errorf("queryarray: %w", h.err)
-				return h.err
-			}
-			_ = t
-		case *[]time.Time:
-			idx := 0
-			if t == nil {
-				t = new([]time.Time)
-			}
-			for sqr.Next() {
-				*t = append(*t, time.Time{})
-				if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
-					h.err = fmt.Errorf("queryarray: %w", h.err)
-					return h.err
-				}
-				idx++
-			}
-			if h.err = sqr.Err(); h.err != nil {
-				h.err = fmt.Errorf("queryarray: %w", h.err)
-				return h.err
-			}
-			_ = t
+	switch t := out.(type) {
+	case *[]string:
+		idx := 0
+		if t == nil {
+			t = new([]string)
 		}
+		for sqr.Next() {
+			*t = append(*t, "")
+			if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
+			}
+			idx++
+		}
+		if h.err = sqr.Err(); h.err != nil {
+			h.err = fmt.Errorf("queryarray: %w", h.err)
+			return h.err
+		}
+		_ = t
+	case *[]int:
+		idx := 0
+		if t == nil {
+			t = new([]int)
+		}
+		for sqr.Next() {
+			*t = append(*t, 0)
+			if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
+			}
+			idx++
+		}
+		if h.err = sqr.Err(); h.err != nil {
+			h.err = fmt.Errorf("queryarray: %w", h.err)
+			return h.err
+		}
+		_ = t
+	case *[]int8:
+		idx := 0
+		if t == nil {
+			t = new([]int8)
+		}
+		for sqr.Next() {
+			*t = append(*t, 0)
+			if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
+			}
+			idx++
+		}
+		if h.err = sqr.Err(); h.err != nil {
+			h.err = fmt.Errorf("queryarray: %w", h.err)
+			return h.err
+		}
+		_ = t
+	case *[]int16:
+		idx := 0
+		if t == nil {
+			t = new([]int16)
+		}
+		for sqr.Next() {
+			*t = append(*t, 0)
+			if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
+			}
+			idx++
+		}
+		if h.err = sqr.Err(); h.err != nil {
+			h.err = fmt.Errorf("queryarray: %w", h.err)
+			return h.err
+		}
+		_ = t
+	case *[]int32:
+		idx := 0
+		if t == nil {
+			t = new([]int32)
+		}
+		for sqr.Next() {
+			*t = append(*t, 0)
+			if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
+			}
+			idx++
+		}
+		if h.err = sqr.Err(); h.err != nil {
+			h.err = fmt.Errorf("queryarray: %w", h.err)
+			return h.err
+		}
+		_ = t
+	case *[]int64:
+		idx := 0
+		if t == nil {
+			t = new([]int64)
+		}
+		for sqr.Next() {
+			*t = append(*t, 0)
+			if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
+			}
+			idx++
+		}
+		if h.err = sqr.Err(); h.err != nil {
+			h.err = fmt.Errorf("queryarray: %w", h.err)
+			return h.err
+		}
+		_ = t
+	case *[]bool:
+		idx := 0
+		if t == nil {
+			t = new([]bool)
+		}
+		for sqr.Next() {
+			*t = append(*t, false)
+			if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
+			}
+			idx++
+		}
+		if h.err = sqr.Err(); h.err != nil {
+			h.err = fmt.Errorf("queryarray: %w", h.err)
+			return h.err
+		}
+		_ = t
+	case *[]float32:
+		idx := 0
+		if t == nil {
+			t = new([]float32)
+		}
+		for sqr.Next() {
+			*t = append(*t, 0)
+			if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
+			}
+			idx++
+		}
+		if h.err = sqr.Err(); h.err != nil {
+			h.err = fmt.Errorf("queryarray: %w", h.err)
+			return h.err
+		}
+		_ = t
+	case *[]float64:
+		idx := 0
+		if t == nil {
+			t = new([]float64)
+		}
+		for sqr.Next() {
+			*t = append(*t, 0)
+			if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
+			}
+			idx++
+		}
+		if h.err = sqr.Err(); h.err != nil {
+			h.err = fmt.Errorf("queryarray: %w", h.err)
+			return h.err
+		}
+		_ = t
+	case *[]time.Time:
+		idx := 0
+		if t == nil {
+			t = new([]time.Time)
+		}
+		for sqr.Next() {
+			*t = append(*t, time.Time{})
+			if h.err = sqr.Scan(&(*t)[idx]); h.err != nil {
+				h.err = fmt.Errorf("queryarray: %w", h.err)
+				return h.err
+			}
+			idx++
+		}
+		if h.err = sqr.Err(); h.err != nil {
+			h.err = fmt.Errorf("queryarray: %w", h.err)
+			return h.err
+		}
+		_ = t
 	}
+
 	return nil
 }
 
 // QueryRow from PostgreSQL helper
-func (h *PostgreSQLHelper) QueryRow(sql string, args ...interface{}) dhl.Row {
+func (h *PostgreSQLHelper) QueryRow(sql string, args ...any) dhl.Row {
+	if h.err != nil {
+		return nil
+	}
+	if h.conn == nil {
+		h.err = fmt.Errorf("queryrow: %w", dhl.ErrNoConn)
+		return nil
+	}
+
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	sql = dhl.ReplaceQueryParamMarker(sql, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
 	sql = dhl.InterpolateTable(sql, h.dbi.Schema)
@@ -597,11 +609,17 @@ func (h *PostgreSQLHelper) QueryRow(sql string, args ...interface{}) dhl.Row {
 }
 
 // Exec from PostgreSQL helper
-func (h *PostgreSQLHelper) Exec(sql string, args ...interface{}) (int64, error) {
+func (h *PostgreSQLHelper) Exec(sql string, args ...any) (int64, error) {
 
 	var (
 		ct pgconn.CommandTag
 	)
+	if h.err != nil {
+		return 0, h.err
+	}
+	if h.conn == nil {
+		return 0, fmt.Errorf("exec: %w", dhl.ErrNoConn)
+	}
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	sql = dhl.ReplaceQueryParamMarker(sql, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
@@ -627,18 +645,25 @@ func (h *PostgreSQLHelper) Exec(sql string, args ...interface{}) (int64, error) 
 }
 
 // Exists checks if a record exist
-func (h *PostgreSQLHelper) Exists(sqlwparams string, args ...interface{}) (bool, error) {
+func (h *PostgreSQLHelper) Exists(sqlwparams string, args ...any) (bool, error) {
 
 	var (
 		exists bool
 		sql    string
 	)
+	if h.err != nil {
+		return false, h.err
+	}
+	if h.conn == nil {
+		return false, nil
+	}
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	sqlwparams = dhl.ReplaceQueryParamMarker(sqlwparams, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
 	sqlwparams = strings.TrimSpace(dhl.InterpolateTable(sqlwparams, h.dbi.Schema))
 	if strings.HasSuffix(sqlwparams, `;`) {
-		return false, errors.New(`semicolons are not allowed at the end of this query`)
+		h.err = errors.New(`semicolons are not allowed at the end of this query`)
+		return false, h.err
 	}
 
 	sql = `SELECT EXISTS (SELECT 1 FROM ` + sqlwparams + `);`
@@ -675,7 +700,8 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		affr int64
 	)
 	if next == nil {
-		return dhl.ErrVarMustBeInit
+		h.err = dhl.ErrVarMustBeInit
+		return h.err
 	}
 	// if the database config has set a sequence generator, this will use it
 	sg := h.dbi.SequenceGenerator
@@ -824,13 +850,13 @@ func (h *PostgreSQLHelper) Escape(fv string) string {
 	if len(fv) == 0 {
 		return ""
 	}
-	senc := *h.dbi.StringEnclosingChar
-	sesc := *h.dbi.StringEscapeChar
-	if len(senc) == 0 {
-		senc = `'`
+	senc := `'`
+	sesc := `\`
+	if h.dbi.StringEnclosingChar != nil && *h.dbi.StringEnclosingChar != "" {
+		senc = *h.dbi.StringEnclosingChar
 	}
-	if len(sesc) == 0 {
-		sesc = `'`
+	if h.dbi.StringEscapeChar != nil && *h.dbi.StringEscapeChar != "" {
+		sesc = *h.dbi.StringEscapeChar
 	}
 	return strings.ReplaceAll(fv, senc, sesc+sesc)
 }

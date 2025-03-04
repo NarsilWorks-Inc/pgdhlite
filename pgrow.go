@@ -17,7 +17,7 @@ func NewPostgreSQLRow(sqlr pgx.Row) PostgreSQLRow {
 }
 
 // Scan to destination variables
-func (ss PostgreSQLRow) Scan(dest ...interface{}) error {
+func (ss PostgreSQLRow) Scan(dest ...any) error {
 
 	destq := prepareDest(dest)
 

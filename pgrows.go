@@ -39,21 +39,17 @@ func (ss PostgreSQLRows) Next() bool {
 }
 
 // Scan to destination variables
-func (ss PostgreSQLRows) Scan(dest ...interface{}) error {
-
+func (ss PostgreSQLRows) Scan(dest ...any) error {
 	destq := prepareDest(dest)
-
 	err := ss.sqr.Scan(destq...)
 	if err != nil {
 		return err
 	}
-
 	// return values
 	err = copyScannedToDest(dest, destq)
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -77,7 +73,7 @@ func (ss PostgreSQLRows) Columns() ([]datahelperlite.Column, error) {
 }
 
 // Values from the rows
-func (ss PostgreSQLRows) Values() ([]interface{}, error) {
+func (ss PostgreSQLRows) Values() ([]any, error) {
 	return nil, nil
 }
 
