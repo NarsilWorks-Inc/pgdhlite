@@ -1,7 +1,7 @@
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/Masterminds/semver/v3 v3.1.1/go.mod h1:VPu/7SZ7ePZ3QOrcuXROw5FAcLl4a0cBrbBpGY/8hQs=
-github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20250301085248-20a5dc8d428b h1:pRv865qOwq+gws7hNRmAyAHeg5LcaBHRnMn4Dd/BZ+M=
-github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20250301085248-20a5dc8d428b/go.mod h1:iTF5gRtcEj4daaot4BnSRRbh32IUWO8JklEim9M0fpM=
+github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20250305000102-8dfe1160f4d5 h1:JEaWYjtmKtLGDVfXHwlqeERhpyBcDwHju2AVeoQMAVw=
+github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20250305000102-8dfe1160f4d5/go.mod h1:oeFJ0hyEKGcnUl+gji7UJLdpAwK4MJlKQ52aW+mgnd0=
 github.com/cockroachdb/apd v1.1.0 h1:3LFP3629v+1aKXU5Q37mxmRxX/pIu1nijXydLShEq5I=
 github.com/cockroachdb/apd v1.1.0/go.mod h1:8Sl8LxpKi29FqWXR16WEFZRNSz3SoPzUzeMeY4+DwBQ=
 github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
@@ -12,8 +12,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/eaglebush/config v0.0.0-20241112071821-d764539c5f47 h1:oHVsx2R5OMHnCs+dhAj4HV96fn6Otvrkj+9QzqrFT1A=
 github.com/eaglebush/config v0.0.0-20241112071821-d764539c5f47/go.mod h1:UkGigEfx+L8E6iSiy130RcUrBl3SV9DPbisdV212wf8=
-github.com/eaglebush/datainfo v0.0.0-20250301085159-138389cbb07f h1:whIvNn/HrAI1Feq81WnMpCciP+aDqJiFy+BLF9P52ds=
-github.com/eaglebush/datainfo v0.0.0-20250301085159-138389cbb07f/go.mod h1:0C7PVnqcTw/HMZlI6ihwKNYHFRA35DYFf96nqy2C31I=
+github.com/eaglebush/datainfo v0.0.0-20250304235132-820af008ea0c h1:qKdPCyfIkwN5K4jxDzPDamwyz4Np1zD6Jqqy8GAPACk=
+github.com/eaglebush/datainfo v0.0.0-20250304235132-820af008ea0c/go.mod h1:0C7PVnqcTw/HMZlI6ihwKNYHFRA35DYFf96nqy2C31I=
 github.com/go-kit/log v0.1.0/go.mod h1:zbhenjAZHb184qTLMA9ZjW7ThYL0H2mk7Q6pNt4vbaY=
 github.com/go-logfmt/logfmt v0.5.0/go.mod h1:wCYkCAKZfumFQihp8CzCvQ3paCTfi41vtzG1KdI/P7A=
 github.com/go-stack/stack v1.8.0/go.mod h1:v0f6uXyyMGvRgIKkXu+yp6POWl0qKG85gN/melR3HDY=
