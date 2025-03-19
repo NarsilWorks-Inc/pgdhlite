@@ -817,7 +817,7 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 	if len(values) > 0 {
 		tableNameWithParameters += ` WHERE `
 	}
-
+	ph = placeholder
 	for _, v := range values {
 		if isInterfaceNil(v.Value) {
 			v.Operator = " IS NULL"
