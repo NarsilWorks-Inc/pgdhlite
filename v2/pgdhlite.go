@@ -59,6 +59,7 @@ func (h *PostgreSQLHelper) Open(ctx context.Context, di *dn.DataInfo) error {
 	h.txInstIdx = 0
 	if di.ConnectionString == nil || *di.ConnectionString == "" {
 		h.err = fmt.Errorf("open: %w", dhl.ErrNoConnStr)
+		return h.err
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -255,6 +256,7 @@ func (h *PostgreSQLHelper) rollbk() error {
 	// Perform rollback
 	if h.err = h.tx.Rollback(h.ctx); h.err != nil && !errors.Is(h.err, sql.ErrTxDone) {
 		h.err = fmt.Errorf("rollback: %w", h.err)
+		return h.err
 	}
 
 	// Reset all transaction state after rollback
@@ -375,7 +377,7 @@ func (h *PostgreSQLHelper) Query(sql string, args ...any) (dhl.Rows, error) {
 	}
 	if h.err != nil {
 		h.err = fmt.Errorf("query: %w", h.err)
-		return h.rws, h.err
+		return nil, h.err
 	}
 	if sqr == nil {
 		h.err = fmt.Errorf("query: %w", dhl.ErrNoConn)
@@ -695,6 +697,7 @@ func (h *PostgreSQLHelper) Exec(sql string, args ...any) (int64, error) {
 				h.err = fmt.Errorf("exec: %w", h.err)
 				return 0, h.err
 			}
+			h.err = nil
 		}
 		return ct.RowsAffected(), nil
 	}
@@ -739,25 +742,23 @@ func (h *PostgreSQLHelper) Exists(sqlwparams string, args ...any) (bool, error) 
 	sql = `SELECT EXISTS (SELECT 1 FROM ` + sqlwparams + `);`
 	if h.tx != nil {
 		h.err = h.tx.QueryRow(h.ctx, sql, args...).Scan(&exists)
-		if errors.Is(h.err, dhl.ErrNoRows) {
-			h.err = nil
-			return false, h.err
-		}
 		if h.err != nil {
-			h.err = fmt.Errorf("exists: %w", h.err)
-			return false, h.err
+			if !errors.Is(h.err, dhl.ErrNoRows) {
+				h.err = fmt.Errorf("exists: %w", h.err)
+				return false, h.err
+			}
+			h.err = nil
 		}
 		return exists, h.err
 	}
 
 	h.err = h.conn.QueryRow(h.ctx, sql, args...).Scan(&exists)
-	if errors.Is(h.err, dhl.ErrNoRows) {
-		h.err = nil
-		return false, h.err
-	}
 	if h.err != nil {
-		h.err = fmt.Errorf("exists: %w", h.err)
-		return false, h.err
+		if !errors.Is(h.err, dhl.ErrNoRows) {
+			h.err = fmt.Errorf("exists: %w", h.err)
+			return false, h.err
+		}
+		h.err = nil
 	}
 	return exists, nil
 }
@@ -769,8 +770,11 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		sql  string
 		affr int64
 	)
+	if h.err != nil {
+		return h.err
+	}
 	if next == nil {
-		h.err = dhl.ErrVarMustBeInit
+		h.err = fmt.Errorf("next: %w", dhl.ErrVarMustBeInit)
 		return h.err
 	}
 	// if the database config has set a sequence generator, this will use it
@@ -919,7 +923,6 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 			return false, h.err
 		}
 		h.err = nil
-		return false, h.err
 	}
 
 	return exists, nil
