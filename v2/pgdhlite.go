@@ -821,8 +821,12 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 	// Dots are not allowed in the sequence name, therefore it must be converted to
 	// another character, for example an underscore. If there is a dot specified
 	// in the serial, it would be parsed as the schema.
-	sch := "public"
 	sln := serial
+	sch := "public"
+	if h.dbi.Schema != nil && *h.dbi.Schema != "" {
+		sch = *h.dbi.Schema
+	}
+
 	if idx := strings.Index(serial, "."); idx != -1 {
 		sch = serial[:idx]
 		sln = strings.ReplaceAll(serial[idx+1:], ".", "_")

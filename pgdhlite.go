@@ -748,6 +748,9 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 	// another character, for example an underscore. If there is a dot specified
 	// in the serial, it would be parsed as the schema.
 	sch := "public"
+	if h.dbi.Schema != "" {
+		sch = h.dbi.Schema
+	}
 	sln := serial
 	if idx := strings.Index(serial, "."); idx != -1 {
 		sch = serial[:idx]
