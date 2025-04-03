@@ -341,7 +341,7 @@ func (h *PostgreSQLHelper) Save(name string) error {
 }
 
 // Query from PostgreSQL helper
-func (h *PostgreSQLHelper) Query(sql string, args ...any) (dhl.Rows, error) {
+func (h *PostgreSQLHelper) Query(query string, args ...any) (dhl.Rows, error) {
 	if h.err != nil {
 		return nil, h.err
 	}
@@ -368,12 +368,12 @@ func (h *PostgreSQLHelper) Query(sql string, args ...any) (dhl.Rows, error) {
 		schema = *h.dbi.Schema
 	}
 
-	sql = dhl.ReplaceQueryParamMarker(sql, paraminseq, placeholder)
-	sql = dhl.InterpolateTable(sql, schema)
+	query = dhl.ReplaceQueryParamMarker(query, paraminseq, placeholder)
+	query = dhl.InterpolateTable(query, schema)
 	if h.tx != nil {
-		sqr, h.err = h.tx.Query(h.ctx, sql, args...)
+		sqr, h.err = h.tx.Query(h.ctx, query, args...)
 	} else {
-		sqr, h.err = h.conn.Query(h.ctx, sql, args...)
+		sqr, h.err = h.conn.Query(h.ctx, query, args...)
 	}
 	if h.err != nil {
 		h.err = fmt.Errorf("query: %w", h.err)
@@ -870,7 +870,7 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 // VerifyWithin a set of validation expression against the underlying database table
 func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExpression) (Valid bool, Error error) {
 	var (
-		andstr, sql,
+		andstr, sqlq,
 		placeholder,
 		schema, ph string
 		paraminseq, exists bool
@@ -917,8 +917,8 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 	if strings.HasSuffix(tableNameWithParameters, `;`) {
 		tableNameWithParameters, _ = strings.CutSuffix(tableNameWithParameters, `;`)
 	}
-	sql = dhl.InterpolateTable(`SELECT EXISTS (SELECT 1 FROM `+tableNameWithParameters+`);`, schema)
-	h.err = h.QueryRow(sql, args...).Scan(&exists)
+	sqlq = dhl.InterpolateTable(`SELECT EXISTS (SELECT 1 FROM `+tableNameWithParameters+`);`, schema)
+	h.err = h.QueryRow(sqlq, args...).Scan(&exists)
 	if h.err != nil {
 		if !errors.Is(h.err, dhl.ErrNoRows) {
 			h.err = fmt.Errorf("verifywithin: %w", h.err)

@@ -338,7 +338,8 @@ func (h *PostgreSQLHelper) Save(name string) error {
 // Query from PostgreSQL helper
 func (h *PostgreSQLHelper) Query(query string, args ...any) (dhl.Rows, error) {
 	var (
-		sqr pgx.Rows
+		sqr    pgx.Rows
+		schema string
 	)
 	if h.err != nil {
 		return nil, h.err
@@ -347,8 +348,11 @@ func (h *PostgreSQLHelper) Query(query string, args ...any) (dhl.Rows, error) {
 		h.err = fmt.Errorf("query: %w", dhl.ErrNoConn)
 		return nil, h.err
 	}
+	if h.dbi.Schema != "" {
+		schema = h.dbi.Schema
+	}
 	query = dhl.ReplaceQueryParamMarker(query, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
-	query = dhl.InterpolateTable(query, h.dbi.Schema)
+	query = dhl.InterpolateTable(query, schema)
 	if h.tx != nil {
 		sqr, h.err = h.tx.Query(h.ctx, query, args...)
 	} else {
@@ -370,11 +374,16 @@ func (h *PostgreSQLHelper) Query(query string, args ...any) (dhl.Rows, error) {
 // QueryArray puts the single column result to an output array
 func (h *PostgreSQLHelper) QueryArray(query string, out any, args ...any) error {
 	var (
-		sqr pgx.Rows
+		sqr    pgx.Rows
+		schema string
 	)
 	if h.err != nil {
 		return h.err
 	}
+	if h.dbi.Schema != "" {
+		schema = h.dbi.Schema
+	}
+
 	switch out.(type) {
 	case *[]string, *[]int, *[]int8, *[]int16, *[]int32, *[]int64, *[]bool, *[]float32, *[]float64:
 	case *[]time.Time:
@@ -385,7 +394,7 @@ func (h *PostgreSQLHelper) QueryArray(query string, out any, args ...any) error 
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	query = dhl.ReplaceQueryParamMarker(query, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
 	// replace tables meant for interpolation {table} for putting the schema
-	query = dhl.InterpolateTable(query, h.dbi.Schema)
+	query = dhl.InterpolateTable(query, schema)
 	if h.tx != nil {
 		sqr, h.err = h.tx.Query(h.ctx, query, args...)
 	} else {
@@ -598,9 +607,14 @@ func (h *PostgreSQLHelper) QueryRow(query string, args ...any) dhl.Row {
 		return nil
 	}
 
+	schema := ""
+	if h.dbi.Schema != "" {
+		schema = h.dbi.Schema
+	}
+
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	query = dhl.ReplaceQueryParamMarker(query, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
-	query = dhl.InterpolateTable(query, h.dbi.Schema)
+	query = dhl.InterpolateTable(query, schema)
 	if h.tx != nil {
 		return h.tx.QueryRow(h.ctx, query, args...)
 	} else {
@@ -612,7 +626,8 @@ func (h *PostgreSQLHelper) QueryRow(query string, args ...any) dhl.Row {
 func (h *PostgreSQLHelper) Exec(query string, args ...any) (int64, error) {
 
 	var (
-		ct pgconn.CommandTag
+		ct     pgconn.CommandTag
+		schema string
 	)
 	if h.err != nil {
 		return 0, h.err
@@ -621,9 +636,13 @@ func (h *PostgreSQLHelper) Exec(query string, args ...any) (int64, error) {
 		return 0, fmt.Errorf("exec: %w", dhl.ErrNoConn)
 	}
 
+	if h.dbi.Schema != "" {
+		schema = h.dbi.Schema
+	}
+
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	query = dhl.ReplaceQueryParamMarker(query, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
-	query = dhl.InterpolateTable(query, h.dbi.Schema)
+	query = dhl.InterpolateTable(query, schema)
 	if h.tx != nil {
 		ct, h.err = h.tx.Exec(h.ctx, query, args...)
 		if h.err != nil {
@@ -648,8 +667,8 @@ func (h *PostgreSQLHelper) Exec(query string, args ...any) (int64, error) {
 func (h *PostgreSQLHelper) Exists(queryWithParams string, args ...any) (bool, error) {
 
 	var (
-		exists bool
-		sqlq   string
+		exists       bool
+		sqlq, schema string
 	)
 	if h.err != nil {
 		return false, h.err
@@ -658,9 +677,13 @@ func (h *PostgreSQLHelper) Exists(queryWithParams string, args ...any) (bool, er
 		return false, nil
 	}
 
+	if h.dbi.Schema != "" {
+		schema = h.dbi.Schema
+	}
+
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	queryWithParams = dhl.ReplaceQueryParamMarker(queryWithParams, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
-	queryWithParams = strings.TrimSpace(dhl.InterpolateTable(queryWithParams, h.dbi.Schema))
+	queryWithParams = strings.TrimSpace(dhl.InterpolateTable(queryWithParams, schema))
 	if strings.HasSuffix(queryWithParams, `;`) {
 		h.err = errors.New(`semicolons are not allowed at the end of this query`)
 		return false, h.err
@@ -696,13 +719,18 @@ func (h *PostgreSQLHelper) Exists(queryWithParams string, args ...any) (bool, er
 func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 
 	var (
-		sqlq string
-		affr int64
+		sqlq, schema string
+		affr         int64
 	)
 	if next == nil {
 		h.err = dhl.ErrVarMustBeInit
 		return h.err
 	}
+
+	if h.dbi.Schema != "" {
+		schema = h.dbi.Schema
+	}
+
 	// if the database config has set a sequence generator, this will use it
 	sg := h.dbi.SequenceGenerator
 	if sg != nil {
@@ -722,7 +750,7 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		// affr (affected rows) must be at least 1 to proceed
 		affr = 1
 		if sg.UpsertQuery != "" {
-			sqlq = dhl.InterpolateTable(strings.ReplaceAll(sg.UpsertQuery, sg.NamePlaceHolder, serial), h.dbi.Schema)
+			sqlq = dhl.InterpolateTable(strings.ReplaceAll(sg.UpsertQuery, sg.NamePlaceHolder, serial), schema)
 			if affr, h.err = h.Exec(sqlq); h.err != nil {
 				h.err = fmt.Errorf("next: %w", h.err)
 				return h.err
@@ -734,7 +762,7 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 			return h.err
 		}
 		// result query needs a single scalar value to be returned
-		sqlq = dhl.InterpolateTable(strings.ReplaceAll(sg.ResultQuery, sg.NamePlaceHolder, serial), h.dbi.Schema)
+		sqlq = dhl.InterpolateTable(strings.ReplaceAll(sg.ResultQuery, sg.NamePlaceHolder, serial), schema)
 		if h.err = h.QueryRow(sqlq).Scan(next); h.err != nil {
 			h.err = fmt.Errorf("next: %w", h.err)
 			return h.err
@@ -747,13 +775,9 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 	// Dots are not allowed in the sequence name, therefore it must be converted to
 	// another character, for example an underscore. If there is a dot specified
 	// in the serial, it would be parsed as the schema.
-	sch := "public"
-	if h.dbi.Schema != "" {
-		sch = h.dbi.Schema
-	}
 	sln := serial
 	if idx := strings.Index(serial, "."); idx != -1 {
-		sch = serial[:idx]
+		schema = serial[:idx]
 		sln = strings.ReplaceAll(serial[idx+1:], ".", "_")
 	}
 
@@ -763,11 +787,11 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 			START 1
 			MINVALUE 1
 			MAXVALUE 2147483647
-			CACHE 1;`, sch, sln)
+			CACHE 1;`, schema, sln)
 
 	// Check if sequence exists, if not create it
 	// Get next value of the sequence
-	sqlq = fmt.Sprintf("SELECT nextval('%s');", h.Escape(sch+"."+sln))
+	sqlq = fmt.Sprintf("SELECT nextval('%s');", h.Escape(schema+"."+sln))
 	if h.tx != nil {
 		_, h.err = h.tx.Exec(h.ctx, seq)
 		if h.err != nil {
@@ -808,7 +832,7 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 		i int
 		andstr,
 		placeholder,
-		ph string
+		ph, schema string
 	)
 
 	tableNameWithParameters := tableName
@@ -816,6 +840,9 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 	placeholder = "?"
 	if h.dbi.ParameterPlaceholder != "" {
 		placeholder = h.dbi.ParameterPlaceholder
+	}
+	if h.dbi.Schema != "" {
+		schema = h.dbi.Schema
 	}
 	if len(values) > 0 {
 		tableNameWithParameters += ` WHERE `
@@ -849,7 +876,7 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 	if strings.HasSuffix(tableNameWithParameters, `;`) {
 		return false, errors.New(`semicolons are not allowed at the end of this query`)
 	}
-	sqlq = dhl.InterpolateTable(`SELECT EXISTS (SELECT 1 FROM `+tableNameWithParameters+`);`, h.dbi.Schema)
+	sqlq = dhl.InterpolateTable(`SELECT EXISTS (SELECT 1 FROM `+tableNameWithParameters+`);`, schema)
 	h.err = h.QueryRow(sqlq, args...).Scan(&exists)
 	if h.err != nil {
 		if !errors.Is(h.err, dhl.ErrNoRows) {
