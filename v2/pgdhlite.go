@@ -829,6 +829,7 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		schema = serial[:idx]
 		sln = strings.ReplaceAll(serial[idx+1:], ".", "_")
 	}
+	sln = "seq_" + sln
 
 	seq := fmt.Sprintf(`
 		CREATE SEQUENCE IF NOT EXISTS %s.%s
