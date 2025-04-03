@@ -389,7 +389,7 @@ func (h *PostgreSQLHelper) Query(sql string, args ...any) (dhl.Rows, error) {
 }
 
 // QueryArray puts the single column result to an output array
-func (h *PostgreSQLHelper) QueryArray(sql string, out any, args ...any) error {
+func (h *PostgreSQLHelper) QueryArray(query string, out any, args ...any) error {
 	var (
 		sqr pgx.Rows
 		placeholder,
@@ -419,13 +419,13 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out any, args ...any) error {
 	}
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
-	sql = dhl.ReplaceQueryParamMarker(sql, paraminseq, placeholder)
+	query = dhl.ReplaceQueryParamMarker(query, paraminseq, placeholder)
 	// replace tables meant for interpolation {table} for putting the schema
-	sql = dhl.InterpolateTable(sql, schema)
+	query = dhl.InterpolateTable(query, schema)
 	if h.tx != nil {
-		sqr, h.err = h.tx.Query(h.ctx, sql, args...)
+		sqr, h.err = h.tx.Query(h.ctx, query, args...)
 	} else {
-		sqr, h.err = h.conn.Query(h.ctx, sql, args...)
+		sqr, h.err = h.conn.Query(h.ctx, query, args...)
 	}
 	if h.err != nil {
 		h.err = fmt.Errorf("queryarray: %w", h.err)
@@ -623,7 +623,7 @@ func (h *PostgreSQLHelper) QueryArray(sql string, out any, args ...any) error {
 }
 
 // QueryRow from PostgreSQL helper
-func (h *PostgreSQLHelper) QueryRow(sql string, args ...any) dhl.Row {
+func (h *PostgreSQLHelper) QueryRow(query string, args ...any) dhl.Row {
 	if h.err != nil {
 		return nil
 	}
@@ -650,17 +650,17 @@ func (h *PostgreSQLHelper) QueryRow(sql string, args ...any) dhl.Row {
 	}
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
-	sql = dhl.ReplaceQueryParamMarker(sql, paraminseq, placeholder)
-	sql = dhl.InterpolateTable(sql, schema)
+	query = dhl.ReplaceQueryParamMarker(query, paraminseq, placeholder)
+	query = dhl.InterpolateTable(query, schema)
 	if h.tx != nil {
-		return h.tx.QueryRow(h.ctx, sql, args...)
+		return h.tx.QueryRow(h.ctx, query, args...)
 	} else {
-		return h.conn.QueryRow(h.ctx, sql, args...)
+		return h.conn.QueryRow(h.ctx, query, args...)
 	}
 }
 
 // Exec from PostgreSQL helper
-func (h *PostgreSQLHelper) Exec(sql string, args ...any) (int64, error) {
+func (h *PostgreSQLHelper) Exec(query string, args ...any) (int64, error) {
 	if h.err != nil {
 		return 0, h.err
 	}
@@ -688,10 +688,10 @@ func (h *PostgreSQLHelper) Exec(sql string, args ...any) (int64, error) {
 	}
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
-	sql = dhl.ReplaceQueryParamMarker(sql, paraminseq, placeholder)
-	sql = dhl.InterpolateTable(sql, schema)
+	query = dhl.ReplaceQueryParamMarker(query, paraminseq, placeholder)
+	query = dhl.InterpolateTable(query, schema)
 	if h.tx != nil {
-		ct, h.err = h.tx.Exec(h.ctx, sql, args...)
+		ct, h.err = h.tx.Exec(h.ctx, query, args...)
 		if h.err != nil {
 			if !errors.Is(h.err, pgx.ErrTxClosed) {
 				h.err = fmt.Errorf("exec: %w", h.err)
@@ -702,7 +702,7 @@ func (h *PostgreSQLHelper) Exec(sql string, args ...any) (int64, error) {
 		return ct.RowsAffected(), nil
 	}
 
-	ct, h.err = h.conn.Exec(h.ctx, sql, args...)
+	ct, h.err = h.conn.Exec(h.ctx, query, args...)
 	if h.err != nil {
 		h.err = fmt.Errorf("exec: %w", h.err)
 		return 0, h.err
@@ -712,10 +712,10 @@ func (h *PostgreSQLHelper) Exec(sql string, args ...any) (int64, error) {
 }
 
 // Exists checks if a record exist
-func (h *PostgreSQLHelper) Exists(sqlwparams string, args ...any) (bool, error) {
+func (h *PostgreSQLHelper) Exists(queryWithParams string, args ...any) (bool, error) {
 
 	var (
-		sql,
+		sqlq,
 		placeholder,
 		schema string
 		paraminseq, exists bool
@@ -733,15 +733,15 @@ func (h *PostgreSQLHelper) Exists(sqlwparams string, args ...any) (bool, error) 
 	}
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
-	sqlwparams = dhl.ReplaceQueryParamMarker(sqlwparams, paraminseq, placeholder)
-	sqlwparams = strings.TrimSpace(dhl.InterpolateTable(sqlwparams, schema))
-	if strings.HasSuffix(sqlwparams, `;`) {
+	queryWithParams = dhl.ReplaceQueryParamMarker(queryWithParams, paraminseq, placeholder)
+	queryWithParams = strings.TrimSpace(dhl.InterpolateTable(queryWithParams, schema))
+	if strings.HasSuffix(queryWithParams, `;`) {
 		return false, errors.New(`semicolons are not allowed at the end of this query`)
 	}
 
-	sql = `SELECT EXISTS (SELECT 1 FROM ` + sqlwparams + `);`
+	sqlq = `SELECT EXISTS (SELECT 1 FROM ` + queryWithParams + `);`
 	if h.tx != nil {
-		h.err = h.tx.QueryRow(h.ctx, sql, args...).Scan(&exists)
+		h.err = h.tx.QueryRow(h.ctx, sqlq, args...).Scan(&exists)
 		if h.err != nil {
 			if !errors.Is(h.err, dhl.ErrNoRows) {
 				h.err = fmt.Errorf("exists: %w", h.err)
@@ -752,7 +752,7 @@ func (h *PostgreSQLHelper) Exists(sqlwparams string, args ...any) (bool, error) 
 		return exists, h.err
 	}
 
-	h.err = h.conn.QueryRow(h.ctx, sql, args...).Scan(&exists)
+	h.err = h.conn.QueryRow(h.ctx, sqlq, args...).Scan(&exists)
 	if h.err != nil {
 		if !errors.Is(h.err, dhl.ErrNoRows) {
 			h.err = fmt.Errorf("exists: %w", h.err)
@@ -767,8 +767,8 @@ func (h *PostgreSQLHelper) Exists(sqlwparams string, args ...any) (bool, error) 
 func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 
 	var (
-		sql  string
-		affr int64
+		sqlq, schema string
+		affr         int64
 	)
 	if h.err != nil {
 		return h.err
@@ -776,6 +776,9 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 	if next == nil {
 		h.err = fmt.Errorf("next: %w", dhl.ErrVarMustBeInit)
 		return h.err
+	}
+	if h.dbi.Schema != nil {
+		schema = *h.dbi.Schema
 	}
 	// if the database config has set a sequence generator, this will use it
 	sg := h.dbi.SequenceGenerator
@@ -796,8 +799,8 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		// affr (affected rows) must be at least 1 to proceed
 		affr = 1
 		if sg.UpsertQuery != "" {
-			sql = strings.ReplaceAll(sg.UpsertQuery, sg.NamePlaceHolder, serial)
-			if affr, h.err = h.Exec(sql); h.err != nil {
+			sqlq = dhl.InterpolateTable(strings.ReplaceAll(sg.UpsertQuery, sg.NamePlaceHolder, serial), schema)
+			if affr, h.err = h.Exec(sqlq); h.err != nil {
 				h.err = fmt.Errorf("next: %w", h.err)
 				return h.err
 			}
@@ -808,8 +811,8 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 			return h.err
 		}
 		// result query needs a single scalar value to be returned
-		sql = strings.ReplaceAll(sg.ResultQuery, sg.NamePlaceHolder, serial)
-		if h.err = h.QueryRow(sql).Scan(next); h.err != nil {
+		sqlq = dhl.InterpolateTable(strings.ReplaceAll(sg.ResultQuery, sg.NamePlaceHolder, serial), schema)
+		if h.err = h.QueryRow(sqlq).Scan(next); h.err != nil {
 			h.err = fmt.Errorf("next: %w", h.err)
 			return h.err
 		}
@@ -822,13 +825,8 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 	// another character, for example an underscore. If there is a dot specified
 	// in the serial, it would be parsed as the schema.
 	sln := serial
-	sch := "public"
-	if h.dbi.Schema != nil && *h.dbi.Schema != "" {
-		sch = *h.dbi.Schema
-	}
-
 	if idx := strings.Index(serial, "."); idx != -1 {
-		sch = serial[:idx]
+		schema = serial[:idx]
 		sln = strings.ReplaceAll(serial[idx+1:], ".", "_")
 	}
 
@@ -838,18 +836,18 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 			START 1
 			MINVALUE 1
 			MAXVALUE 2147483647
-			CACHE 1;`, sch, sln)
+			CACHE 1;`, schema, sln)
 
 	// Check if sequence exists, if not create it
 	// Get next value of the sequence
-	sql = fmt.Sprintf("SELECT nextval('%s');", h.Escape(sch+"."+sln))
+	sqlq = fmt.Sprintf("SELECT nextval('%s');", h.Escape(schema+"."+sln))
 	if h.tx != nil {
 		_, h.err = h.tx.Exec(h.ctx, seq)
 		if h.err != nil {
 			h.err = fmt.Errorf("next: %w", h.err)
 			return h.err
 		}
-		h.err = h.tx.QueryRow(h.ctx, sql).Scan(next)
+		h.err = h.tx.QueryRow(h.ctx, sqlq).Scan(next)
 		if h.err != nil {
 			h.err = fmt.Errorf("next: %w", h.err)
 			return h.err
@@ -861,7 +859,7 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		h.err = fmt.Errorf("next: %w", h.err)
 		return h.err
 	}
-	h.err = h.conn.QueryRow(h.ctx, sql).Scan(next)
+	h.err = h.conn.QueryRow(h.ctx, sqlq).Scan(next)
 	if h.err != nil {
 		h.err = fmt.Errorf("next: %w", h.err)
 		return h.err
