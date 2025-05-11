@@ -855,7 +855,7 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		}
 		return nil
 	}
-	_, h.err = h.tx.Exec(h.ctx, seq)
+	_, h.err = h.conn.Exec(h.ctx, seq)
 	if h.err != nil {
 		h.err = fmt.Errorf("next: %w", h.err)
 		return h.err
