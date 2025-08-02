@@ -25,11 +25,11 @@ type PostgreSQLHelper struct {
 	tx   pgx.Tx
 	rws  dhl.Rows
 	trCnt,
-	reuseCnt,
-	txInstIdx uint8
-	rw     sync.RWMutex
-	txInst map[uint8]uint8
-	err    error
+	reuseCnt uint8
+	rw  sync.RWMutex
+	err error
+	rollbackTriggered,
+	committed bool
 }
 
 func init() {
@@ -39,10 +39,7 @@ func init() {
 
 // NewHelper instantiates new helper
 func (h *PostgreSQLHelper) NewHelper() dhl.DataHelperLite {
-	return &PostgreSQLHelper{
-		txInst:    make(map[uint8]uint8),
-		txInstIdx: 0,
-	}
+	return &PostgreSQLHelper{}
 }
 
 // Open a new connection
@@ -55,12 +52,11 @@ func (h *PostgreSQLHelper) Open(ctx context.Context, di *cfg.DatabaseInfo) error
 	}
 
 	h.err = nil
-	h.txInst = make(map[uint8]uint8)
-	h.txInstIdx = 0
 	h.dbi = di
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	h.dbi = di
 	h.ctx = ctx
 
 	var cfg *pgxpool.Config
@@ -137,8 +133,8 @@ func (h *PostgreSQLHelper) Begin() error {
 	// Move the new index to the forward position
 	h.rw.Lock()
 	h.trCnt++
-	h.txInst[h.trCnt] = 1
-	h.txInstIdx = h.trCnt
+	h.committed = false         // ✅ Reset commit state
+	h.rollbackTriggered = false // ✅ Reset rollback state
 	h.rw.Unlock()
 	return nil
 }
@@ -146,7 +142,7 @@ func (h *PostgreSQLHelper) Begin() error {
 // Commit a transaction.
 func (h *PostgreSQLHelper) Commit() error {
 	// Return early if any of the conditions are true
-	if h.tx == nil || h.trCnt == 0 || h.txInstIdx == 0 || len(h.txInst) == 0 {
+	if h.tx == nil || h.trCnt == 0 || h.rollbackTriggered || h.committed {
 		return nil
 	}
 
@@ -158,18 +154,9 @@ func (h *PostgreSQLHelper) Commit() error {
 	h.rw.Lock()
 	defer h.rw.Unlock()
 
-	// Check if the current transaction instance is valid
-	if flag := h.txInst[h.txInstIdx]; flag == 0 {
-		h.txInstIdx-- // Move to the previous transaction instance
-		return nil
-	}
-
-	// If the transaction is not the first transaction,
-	// reduce the transaction count and set the current map index value
-	// as processed
+	// If the transaction is not the first transaction, reduce the transaction count
 	if h.trCnt > 1 {
 		h.trCnt--
-		h.txInst[h.txInstIdx] = 0 // Mark the current transaction as processed
 		return nil
 	}
 
@@ -184,18 +171,17 @@ func (h *PostgreSQLHelper) Commit() error {
 	}
 
 	// Commit the outermost transaction
-	if h.trCnt == 1 {
-		if h.err = h.tx.Commit(h.ctx); h.err != nil && !errors.Is(h.err, sql.ErrTxDone) {
-			h.err = fmt.Errorf("commit: %w", h.err)
-			return h.err
-		}
+	if h.err = h.tx.Commit(h.ctx); h.err != nil && !errors.Is(h.err, sql.ErrTxDone) {
+		h.err = fmt.Errorf("commit: %w", h.err)
+		return h.err
 	}
 
 	// Reset transaction state after a successful commit
 	h.tx = nil
 	h.trCnt = 0
-	h.txInstIdx = 0
-	h.txInst = make(map[uint8]uint8)
+	h.committed = true
+	h.tx = nil
+	h.rollbackTriggered = false
 
 	return nil
 }
@@ -204,7 +190,7 @@ func (h *PostgreSQLHelper) Commit() error {
 func (h *PostgreSQLHelper) Rollback() error {
 
 	// Return early if any of the conditions are true
-	if h.tx == nil || h.trCnt == 0 || h.txInstIdx == 0 || len(h.txInst) == 0 {
+	if h.tx == nil || h.trCnt == 0 || h.committed {
 		return nil
 	}
 
@@ -212,32 +198,20 @@ func (h *PostgreSQLHelper) Rollback() error {
 		return h.rollbk()
 	}
 
-	// Handle nested transactions
-	// If the value of the map is zero, we move to the earlier transaction
-	if flag := h.txInst[h.txInstIdx]; flag == 0 {
-		h.txInstIdx--
-		return nil
-	}
-
-	// If the transaction is not the first transaction,
-	// reduce the transaction count and set the current map index value
-	// as processed
+	// If the transaction is not the first transaction, reduce the transaction count
 	if h.trCnt > 1 {
 		h.trCnt--
-		h.txInst[h.txInstIdx] = 0 // Mark the current transaction as processed
 		return nil
 	}
 
 	// If this is the outermost transaction, rollback the transaction
-	// If the queries resulted an error, we also roll it back
-	if h.trCnt == 1 {
-		return h.rollbk()
-	}
-
-	return nil
+	return h.rollbk()
 }
 
 func (h *PostgreSQLHelper) rollbk() error {
+	if h.committed {
+		return nil // 🔧 If already committed, skip rollback
+	}
 
 	// Ensure DB, connection, and transaction are valid before rolling back
 	if h.conn == nil {
@@ -249,20 +223,24 @@ func (h *PostgreSQLHelper) rollbk() error {
 		return h.err
 	}
 
+	h.rw.Lock()
+	h.rollbackTriggered = true // 🔧 Mark rollback occurred
+	h.rw.Unlock()
+
 	// Perform rollback
 	if h.err = h.tx.Rollback(h.ctx); h.err != nil && !errors.Is(h.err, sql.ErrTxDone) {
 		h.err = fmt.Errorf("rollback: %w", h.err)
+		return h.err
 	}
 
 	// Reset all transaction state after rollback
 	h.rw.Lock()
-	defer h.rw.Unlock()
-
 	h.tx = nil
 	h.trCnt = 0
-	h.txInstIdx = 0
 	h.err = nil
-	h.txInst = make(map[uint8]uint8)
+	h.committed = false         // 🔧 Reset flags
+	h.rollbackTriggered = false // 🔧 Reset flags (rollback is done)
+	h.rw.Unlock()
 	return nil
 }
 
@@ -337,10 +315,6 @@ func (h *PostgreSQLHelper) Save(name string) error {
 
 // Query from PostgreSQL helper
 func (h *PostgreSQLHelper) Query(query string, args ...any) (dhl.Rows, error) {
-	var (
-		sqr    pgx.Rows
-		schema string
-	)
 	if h.err != nil {
 		return nil, h.err
 	}
@@ -348,10 +322,24 @@ func (h *PostgreSQLHelper) Query(query string, args ...any) (dhl.Rows, error) {
 		h.err = fmt.Errorf("query: %w", dhl.ErrNoConn)
 		return nil, h.err
 	}
+
+	var (
+		sqr pgx.Rows
+		placeholder,
+		schema string
+		paramInSeq bool
+	)
+
+	placeholder = "?"
+	if h.dbi.ParameterPlaceholder != "" {
+		placeholder = h.dbi.ParameterPlaceholder
+	}
+	paramInSeq = h.dbi.ParameterInSequence
 	if h.dbi.Schema != "" {
 		schema = h.dbi.Schema
 	}
-	query = dhl.ReplaceQueryParamMarker(query, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
+
+	query = dhl.ReplaceQueryParamMarker(query, paramInSeq, placeholder)
 	query = dhl.InterpolateTable(query, schema)
 	if h.tx != nil {
 		sqr, h.err = h.tx.Query(h.ctx, query, args...)
@@ -360,7 +348,7 @@ func (h *PostgreSQLHelper) Query(query string, args ...any) (dhl.Rows, error) {
 	}
 	if h.err != nil {
 		h.err = fmt.Errorf("query: %w", h.err)
-		return h.rws, h.err
+		return nil, h.err
 	}
 	if sqr == nil {
 		h.err = fmt.Errorf("query: %w", dhl.ErrNoConn)
@@ -374,16 +362,24 @@ func (h *PostgreSQLHelper) Query(query string, args ...any) (dhl.Rows, error) {
 // QueryArray puts the single column result to an output array
 func (h *PostgreSQLHelper) QueryArray(query string, out any, args ...any) error {
 	var (
-		sqr    pgx.Rows
+		sqr pgx.Rows
+		placeholder,
 		schema string
+		paramInSeq bool
 	)
-	if h.err != nil {
-		return h.err
+
+	placeholder = "?"
+	if h.dbi.ParameterPlaceholder != "" {
+		placeholder = h.dbi.ParameterPlaceholder
 	}
+	paramInSeq = h.dbi.ParameterInSequence
 	if h.dbi.Schema != "" {
 		schema = h.dbi.Schema
 	}
 
+	if h.err != nil {
+		return h.err
+	}
 	switch out.(type) {
 	case *[]string, *[]int, *[]int8, *[]int16, *[]int32, *[]int64, *[]bool, *[]float32, *[]float64:
 	case *[]time.Time:
@@ -392,7 +388,7 @@ func (h *PostgreSQLHelper) QueryArray(query string, out any, args ...any) error 
 	}
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
-	query = dhl.ReplaceQueryParamMarker(query, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
+	query = dhl.ReplaceQueryParamMarker(query, paramInSeq, placeholder)
 	// replace tables meant for interpolation {table} for putting the schema
 	query = dhl.InterpolateTable(query, schema)
 	if h.tx != nil {
@@ -408,7 +404,6 @@ func (h *PostgreSQLHelper) QueryArray(query string, out any, args ...any) error 
 		h.err = fmt.Errorf("queryarray: %w", dhl.ErrNoConn)
 		return h.err
 	}
-
 	defer sqr.Close()
 
 	switch t := out.(type) {
@@ -593,7 +588,6 @@ func (h *PostgreSQLHelper) QueryArray(query string, out any, args ...any) error 
 		}
 		_ = t
 	}
-
 	return nil
 }
 
@@ -607,13 +601,23 @@ func (h *PostgreSQLHelper) QueryRow(query string, args ...any) dhl.Row {
 		return nil
 	}
 
-	schema := ""
+	var (
+		placeholder,
+		schema string
+		paramInSeq bool
+	)
+
+	placeholder = "?"
+	if h.dbi.ParameterPlaceholder != "" {
+		placeholder = h.dbi.ParameterPlaceholder
+	}
+	paramInSeq = h.dbi.ParameterInSequence
 	if h.dbi.Schema != "" {
 		schema = h.dbi.Schema
 	}
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
-	query = dhl.ReplaceQueryParamMarker(query, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
+	query = dhl.ReplaceQueryParamMarker(query, paramInSeq, placeholder)
 	query = dhl.InterpolateTable(query, schema)
 	if h.tx != nil {
 		return h.tx.QueryRow(h.ctx, query, args...)
@@ -624,24 +628,32 @@ func (h *PostgreSQLHelper) QueryRow(query string, args ...any) dhl.Row {
 
 // Exec from PostgreSQL helper
 func (h *PostgreSQLHelper) Exec(query string, args ...any) (int64, error) {
-
-	var (
-		ct     pgconn.CommandTag
-		schema string
-	)
 	if h.err != nil {
 		return 0, h.err
 	}
 	if h.conn == nil {
-		return 0, fmt.Errorf("exec: %w", dhl.ErrNoConn)
+		h.err = fmt.Errorf("exec: %w", dhl.ErrNoConn)
+		return 0, h.err
 	}
 
+	var (
+		ct pgconn.CommandTag
+		placeholder,
+		schema string
+		paramInSeq bool
+	)
+
+	placeholder = "?"
+	if h.dbi.ParameterPlaceholder != "" {
+		placeholder = h.dbi.ParameterPlaceholder
+	}
+	paramInSeq = h.dbi.ParameterInSequence
 	if h.dbi.Schema != "" {
 		schema = h.dbi.Schema
 	}
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
-	query = dhl.ReplaceQueryParamMarker(query, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
+	query = dhl.ReplaceQueryParamMarker(query, paramInSeq, placeholder)
 	query = dhl.InterpolateTable(query, schema)
 	if h.tx != nil {
 		ct, h.err = h.tx.Exec(h.ctx, query, args...)
@@ -650,6 +662,7 @@ func (h *PostgreSQLHelper) Exec(query string, args ...any) (int64, error) {
 				h.err = fmt.Errorf("exec: %w", h.err)
 				return 0, h.err
 			}
+			h.err = nil
 		}
 		return ct.RowsAffected(), nil
 	}
@@ -667,50 +680,48 @@ func (h *PostgreSQLHelper) Exec(query string, args ...any) (int64, error) {
 func (h *PostgreSQLHelper) Exists(queryWithParams string, args ...any) (bool, error) {
 
 	var (
-		exists       bool
-		sqlq, schema string
+		sqlq,
+		placeholder,
+		schema string
+		paramInSeq, exists bool
 	)
-	if h.err != nil {
-		return false, h.err
-	}
-	if h.conn == nil {
-		return false, nil
-	}
 
+	placeholder = "?"
+	if h.dbi.ParameterPlaceholder != "" {
+		placeholder = h.dbi.ParameterPlaceholder
+	}
+	paramInSeq = h.dbi.ParameterInSequence
 	if h.dbi.Schema != "" {
 		schema = h.dbi.Schema
 	}
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
-	queryWithParams = dhl.ReplaceQueryParamMarker(queryWithParams, h.dbi.ParameterInSequence, h.dbi.ParameterPlaceholder)
+	queryWithParams = dhl.ReplaceQueryParamMarker(queryWithParams, paramInSeq, placeholder)
 	queryWithParams = strings.TrimSpace(dhl.InterpolateTable(queryWithParams, schema))
 	if strings.HasSuffix(queryWithParams, `;`) {
-		h.err = errors.New(`semicolons are not allowed at the end of this query`)
-		return false, h.err
+		return false, errors.New(`semicolons are not allowed at the end of this query`)
 	}
 
 	sqlq = `SELECT EXISTS (SELECT 1 FROM ` + queryWithParams + `);`
 	if h.tx != nil {
 		h.err = h.tx.QueryRow(h.ctx, sqlq, args...).Scan(&exists)
-		if errors.Is(h.err, dhl.ErrNoRows) {
-			h.err = nil
-			return false, h.err
-		}
 		if h.err != nil {
-			h.err = fmt.Errorf("exists: %w", h.err)
-			return false, h.err
+			if !errors.Is(h.err, dhl.ErrNoRows) {
+				h.err = fmt.Errorf("exists: %w", h.err)
+				return false, h.err
+			}
+			h.err = nil
 		}
 		return exists, h.err
 	}
 
 	h.err = h.conn.QueryRow(h.ctx, sqlq, args...).Scan(&exists)
-	if errors.Is(h.err, dhl.ErrNoRows) {
-		h.err = nil
-		return false, h.err
-	}
 	if h.err != nil {
-		h.err = fmt.Errorf("exists: %w", h.err)
-		return false, h.err
+		if !errors.Is(h.err, dhl.ErrNoRows) {
+			h.err = fmt.Errorf("exists: %w", h.err)
+			return false, h.err
+		}
+		h.err = nil
 	}
 	return exists, nil
 }
@@ -722,15 +733,16 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		sqlq, schema string
 		affr         int64
 	)
-	if next == nil {
-		h.err = dhl.ErrVarMustBeInit
+	if h.err != nil {
 		return h.err
 	}
-
+	if next == nil {
+		h.err = fmt.Errorf("next: %w", dhl.ErrVarMustBeInit)
+		return h.err
+	}
 	if h.dbi.Schema != "" {
 		schema = h.dbi.Schema
 	}
-
 	// if the database config has set a sequence generator, this will use it
 	sg := h.dbi.SequenceGenerator
 	if sg != nil {
@@ -830,21 +842,25 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 	}
 
 	var (
-		i int
-		andstr,
+		andstr, sqlq,
 		placeholder,
-		ph, schema string
+		schema, ph string
+		paramInSeq, exists bool
+		i                  int
 	)
 
-	tableNameWithParameters := tableName
 	args := make([]any, 0)
+
 	placeholder = "?"
 	if h.dbi.ParameterPlaceholder != "" {
 		placeholder = h.dbi.ParameterPlaceholder
 	}
+	paramInSeq = h.dbi.ParameterInSequence
 	if h.dbi.Schema != "" {
 		schema = h.dbi.Schema
 	}
+
+	tableNameWithParameters := tableName
 	if len(values) > 0 {
 		tableNameWithParameters += ` WHERE `
 	}
@@ -854,11 +870,10 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 			v.Operator = " IS NULL"
 			ph = ""
 		} else {
-			// If there is no operator, we default to "="
 			if v.Operator == "" {
 				v.Operator = "="
 			}
-			if h.dbi.ParameterInSequence {
+			if paramInSeq {
 				ph = placeholder + strconv.Itoa(i+1)
 			}
 			args = append(args, v.Value)
@@ -868,14 +883,9 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 		andstr = " AND "
 	}
 
-	var (
-		sqlq   string
-		exists bool
-	)
-
 	tableNameWithParameters = strings.TrimSpace(tableNameWithParameters)
 	if strings.HasSuffix(tableNameWithParameters, `;`) {
-		return false, errors.New(`semicolons are not allowed at the end of this query`)
+		tableNameWithParameters, _ = strings.CutSuffix(tableNameWithParameters, `;`)
 	}
 	sqlq = dhl.InterpolateTable(`SELECT EXISTS (SELECT 1 FROM `+tableNameWithParameters+`);`, schema)
 	h.err = h.QueryRow(sqlq, args...).Scan(&exists)
@@ -885,7 +895,6 @@ func (h *PostgreSQLHelper) VerifyWithin(tableName string, values []dhl.VerifyExp
 			return false, h.err
 		}
 		h.err = nil
-		return false, h.err
 	}
 
 	return exists, nil
