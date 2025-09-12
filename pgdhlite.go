@@ -30,6 +30,8 @@ type PostgreSQLHelper struct {
 	err error
 	rollbackTriggered,
 	committed bool
+	trnIdMap  map[int8]bool
+	lastTrnId int8
 }
 
 func init() {
@@ -106,13 +108,14 @@ func (h *PostgreSQLHelper) Close() error {
 	h.conn.Close()
 	h.conn = nil
 	h.rw.Lock()
+	defer h.rw.Unlock()
 	h.trCnt = 0
 	h.err = nil
-	h.rw.Unlock()
+	h.trnIdMap = nil
 	return nil
 }
 
-// Begin a transaction. If there is an existing transaction, begin is ignored
+// Begin a transaction to support deferred rollback.
 func (h *PostgreSQLHelper) Begin() error {
 	if h.err != nil {
 		return h.err
@@ -132,12 +135,50 @@ func (h *PostgreSQLHelper) Begin() error {
 	// The transaction count will serve as the key for the new map value, set to 1
 	// Move the new index to the forward position
 	h.rw.Lock()
+	defer h.rw.Unlock()
 	h.trCnt++
 	h.committed = false         // ✅ Reset commit state
 	h.rollbackTriggered = false // ✅ Reset rollback state
-	h.rw.Unlock()
+
+	// Set trn id flag up
+	if h.trCnt > 1 {
+		if h.trnIdMap == nil {
+			h.trnIdMap = make(map[int8]bool)
+		}
+		h.lastTrnId++
+		h.trnIdMap[h.lastTrnId] = true
+	}
+
 	return nil
 }
+
+// Begin a transaction to support deferred rollback.
+func (h *PostgreSQLHelper) BeginManually() error {
+	if h.err != nil {
+		return h.err
+	}
+	if h.conn == nil {
+		h.err = fmt.Errorf("begin: %w", dhl.ErrNoConn)
+		return h.err
+	}
+	if h.tx == nil {
+		h.tx, h.err = h.conn.BeginTx(h.ctx, pgx.TxOptions{})
+		if h.err != nil {
+			h.err = fmt.Errorf("begin: %w", h.err)
+			return h.err
+		}
+	}
+	// Increment transaction count
+	h.rw.Lock()
+	defer h.rw.Unlock()
+	h.trCnt++
+	h.committed = false         // Reset commit state
+	h.rollbackTriggered = false // Reset rollback state
+	h.lastTrnId = 0
+	h.trnIdMap = nil
+	return nil
+}
+
 
 // Commit a transaction.
 func (h *PostgreSQLHelper) Commit() error {
@@ -154,8 +195,14 @@ func (h *PostgreSQLHelper) Commit() error {
 	h.rw.Lock()
 	defer h.rw.Unlock()
 
-	// If the transaction is not the first transaction, reduce the transaction count
+	// If the transaction is not the outermost transaction, reduce transaction count.
 	if h.trCnt > 1 {
+		// If this transaction was called with Begin(), this is a deferred rollback
+		// Record the last transaction id (via count) and set the map to false
+		// Then reduce the number of transaction count
+		if h.trnIdMap != nil {
+			h.trnIdMap[h.lastTrnId] = false
+		}
 		h.trCnt--
 		return nil
 	}
@@ -177,12 +224,12 @@ func (h *PostgreSQLHelper) Commit() error {
 	}
 
 	// Reset transaction state after a successful commit
-	h.tx = nil
-	h.trCnt = 0
 	h.committed = true
 	h.tx = nil
+	h.trCnt = 0
+	h.lastTrnId = 0
+	h.trnIdMap = nil
 	h.rollbackTriggered = false
-
 	return nil
 }
 
@@ -196,6 +243,13 @@ func (h *PostgreSQLHelper) Rollback() error {
 
 	if h.err != nil {
 		return h.rollbk()
+	}
+
+	// If trnId's flag was off, return early
+	// This only applies to deferred rollbacks
+	if h.trnIdMap != nil && !h.trnIdMap[h.lastTrnId] {
+		h.lastTrnId--
+		return nil
 	}
 
 	// If the transaction is not the first transaction, reduce the transaction count
@@ -235,12 +289,13 @@ func (h *PostgreSQLHelper) rollbk() error {
 
 	// Reset all transaction state after rollback
 	h.rw.Lock()
+	defer h.rw.Unlock()
 	h.tx = nil
 	h.trCnt = 0
-	h.err = nil
 	h.committed = false         // 🔧 Reset flags
 	h.rollbackTriggered = false // 🔧 Reset flags (rollback is done)
-	h.rw.Unlock()
+	h.trnIdMap = nil
+	h.err = nil
 	return nil
 }
 

@@ -1,11 +1,11 @@
 module github.com/NarsilWorks-Inc/pgdhlite
 
-go 1.23.2
+go 1.24.0
 
 toolchain go1.24.2
 
 require (
-	github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20250525023210-ddf754698b81
+	github.com/NarsilWorks-Inc/datahelperlite v0.0.0-20250910001607-b37b7e8bead3
 	github.com/eaglebush/config v0.0.0-20250611012335-419b70539d8c
 	github.com/eaglebush/datainfo v0.0.0-20250527032652-fddc6e5f9a72
 	github.com/jackc/pgconn v1.14.3
@@ -21,6 +21,6 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgtype v1.14.4
 	github.com/jackc/puddle v1.3.0 // indirect
-	golang.org/x/crypto v0.40.0 // indirect
-	golang.org/x/text v0.27.0 // indirect
+	golang.org/x/crypto v0.42.0 // indirect
+	golang.org/x/text v0.29.0 // indirect
 )
