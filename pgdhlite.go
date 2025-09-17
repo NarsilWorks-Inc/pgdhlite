@@ -179,7 +179,6 @@ func (h *PostgreSQLHelper) BeginManually() error {
 	return nil
 }
 
-
 // Commit a transaction.
 func (h *PostgreSQLHelper) Commit() error {
 	// Return early if any of the conditions are true
@@ -848,6 +847,9 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 		sln = strings.ReplaceAll(serial[idx+1:], ".", "_")
 	}
 	sln = "seq_" + sln
+	if schema == "" {
+		schema = "public"
+	}
 
 	seq := fmt.Sprintf(`
 		CREATE SEQUENCE IF NOT EXISTS %s.%s
