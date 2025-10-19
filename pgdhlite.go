@@ -1033,3 +1033,8 @@ func (h *PostgreSQLHelper) Ping() error {
 func (h *PostgreSQLHelper) PoolSet() {
 	h.poolAtInit = true
 }
+
+// PoolUnset set the pool to unset
+func (h *PostgreSQLHelper) PoolUnset() {
+	h.poolAtInit = false
+}
