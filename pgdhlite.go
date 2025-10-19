@@ -1108,7 +1108,12 @@ func (h *PostgreSQLHelper) Ping() error {
 	return h.conn.Ping(h.ctx)
 }
 
-// PoolSet indicates that the helper was set externally
+// Pooled indicates that the helper was set externally or pooled
+func (h *PostgreSQLHelper) Pooled() bool {
+	return h.poolAtInit
+}
+
+// PoolSet sets the state that the helper was set externally or being pooled
 func (h *PostgreSQLHelper) PoolSet() {
 	h.poolAtInit = true
 }
