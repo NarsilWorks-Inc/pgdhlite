@@ -21,9 +21,10 @@ import (
 type PostgreSQLHelper struct {
 	conn *pgxpool.Pool
 	dbi  *dn.DataInfo
-	ctx  context.Context
-	tx   pgx.Tx
-	rws  dhl.Rows
+	ctx,
+	rCtx context.Context
+	tx  pgx.Tx
+	rws dhl.Rows
 	trCnt,
 	reuseCnt uint8
 	rw  sync.RWMutex
@@ -54,6 +55,10 @@ func (h *PostgreSQLHelper) Open(ctx context.Context, di *dn.DataInfo) error {
 	}
 
 	h.err = nil
+	if di.ConnectionString == nil {
+		h.err = fmt.Errorf("open: %s", "connection string is not specified")
+		return h.err
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -87,6 +92,18 @@ func (h *PostgreSQLHelper) Open(ctx context.Context, di *dn.DataInfo) error {
 	h.rw.Lock()
 	h.reuseCnt = 0
 	h.rw.Unlock()
+	return nil
+}
+
+// Acquire sets all queries to a new context from pool.
+//
+// It will return an error if the current connection is not pooled.
+func (h *PostgreSQLHelper) Acquire(ctx context.Context) error {
+	if !h.poolAtInit {
+		h.err = fmt.Errorf("acquire: opened connection is not from pool")
+		return h.err
+	}
+	h.rCtx = ctx
 	return nil
 }
 
@@ -132,7 +149,13 @@ func (h *PostgreSQLHelper) Begin() error {
 		return h.err
 	}
 	if h.tx == nil {
-		h.tx, h.err = h.conn.BeginTx(h.ctx, pgx.TxOptions{})
+		// Set the context to the connection context
+		// Use the acquired context if availables
+		ctx := h.ctx
+		if h.rCtx != nil {
+			ctx = h.rCtx
+		}
+		h.tx, h.err = h.conn.BeginTx(ctx, pgx.TxOptions{})
 		if h.err != nil {
 			h.err = fmt.Errorf("begin: %w", h.err)
 			return h.err
@@ -168,7 +191,11 @@ func (h *PostgreSQLHelper) BeginManually() error {
 		return h.err
 	}
 	if h.tx == nil {
-		h.tx, h.err = h.conn.BeginTx(h.ctx, pgx.TxOptions{})
+		ctx := h.ctx
+		if h.rCtx != nil {
+			ctx = h.rCtx
+		}
+		h.tx, h.err = h.conn.BeginTx(ctx, pgx.TxOptions{})
 		if h.err != nil {
 			h.err = fmt.Errorf("begin: %w", h.err)
 			return h.err
@@ -223,7 +250,11 @@ func (h *PostgreSQLHelper) Commit() error {
 	}
 
 	// Commit the outermost transaction
-	if h.err = h.tx.Commit(h.ctx); h.err != nil && !errors.Is(h.err, sql.ErrTxDone) {
+	ctx := h.ctx
+	if h.rCtx != nil {
+		ctx = h.rCtx
+	}
+	if h.err = h.tx.Commit(ctx); h.err != nil && !errors.Is(h.err, sql.ErrTxDone) {
 		h.err = fmt.Errorf("commit: %w", h.err)
 		return h.err
 	}
@@ -287,8 +318,13 @@ func (h *PostgreSQLHelper) rollbk() error {
 	h.rollbackTriggered = true // ?? Mark rollback occurred
 	h.rw.Unlock()
 
+	ctx := h.ctx
+	if h.rCtx != nil {
+		ctx = h.rCtx
+	}
+
 	// Perform rollback
-	if h.err = h.tx.Rollback(h.ctx); h.err != nil && !errors.Is(h.err, sql.ErrTxDone) {
+	if h.err = h.tx.Rollback(ctx); h.err != nil && !errors.Is(h.err, sql.ErrTxDone) {
 		h.err = fmt.Errorf("rollback: %w", h.err)
 		return h.err
 	}
@@ -319,7 +355,11 @@ func (h *PostgreSQLHelper) Mark(name string) error {
 		return h.err
 	}
 	if h.trCnt > 0 {
-		_, h.err = h.tx.Exec(h.ctx, `SAVEPOINT sp_`+name+`;`)
+		ctx := h.ctx
+		if h.rCtx != nil {
+			ctx = h.rCtx
+		}
+		_, h.err = h.tx.Exec(ctx, `SAVEPOINT sp_`+name+`;`)
 		if h.err != nil {
 			h.err = fmt.Errorf("mark: %w", h.err)
 			return h.err
@@ -342,7 +382,11 @@ func (h *PostgreSQLHelper) Discard(name string) error {
 		return h.err
 	}
 	if h.trCnt > 0 {
-		_, h.err = h.tx.Exec(h.ctx, `ROLLBACK TO SAVEPOINT sp_`+name+`;`)
+		ctx := h.ctx
+		if h.rCtx != nil {
+			ctx = h.rCtx
+		}
+		_, h.err = h.tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_`+name+`;`)
 		if h.err != nil {
 			h.err = fmt.Errorf("discard: %w", h.err)
 			return h.err
@@ -365,7 +409,11 @@ func (h *PostgreSQLHelper) Save(name string) error {
 		return h.err
 	}
 	if h.trCnt > 0 {
-		_, h.err = h.tx.Exec(h.ctx, `RELEASE SAVEPOINT sp_`+name+`;`)
+		ctx := h.ctx
+		if h.rCtx != nil {
+			ctx = h.rCtx
+		}
+		_, h.err = h.tx.Exec(ctx, `RELEASE SAVEPOINT sp_`+name+`;`)
 		if h.err != nil {
 			h.err = fmt.Errorf("save: %w", h.err)
 			return h.err
@@ -404,10 +452,15 @@ func (h *PostgreSQLHelper) Query(query string, args ...any) (dhl.Rows, error) {
 
 	query = dhl.ReplaceQueryParamMarker(query, paramInSeq, placeholder)
 	query = dhl.InterpolateTable(query, schema)
+
+	ctx := h.ctx
+	if h.rCtx != nil {
+		ctx = h.rCtx
+	}
 	if h.tx != nil {
-		sqr, h.err = h.tx.Query(h.ctx, query, args...)
+		sqr, h.err = h.tx.Query(ctx, query, args...)
 	} else {
-		sqr, h.err = h.conn.Query(h.ctx, query, args...)
+		sqr, h.err = h.conn.Query(ctx, query, args...)
 	}
 	if h.err != nil {
 		h.err = fmt.Errorf("query: %w", h.err)
@@ -456,10 +509,15 @@ func (h *PostgreSQLHelper) QueryArray(query string, out any, args ...any) error 
 	query = dhl.ReplaceQueryParamMarker(query, paramInSeq, placeholder)
 	// replace tables meant for interpolation {table} for putting the schema
 	query = dhl.InterpolateTable(query, schema)
+
+	ctx := h.ctx
+	if h.rCtx != nil {
+		ctx = h.rCtx
+	}
 	if h.tx != nil {
-		sqr, h.err = h.tx.Query(h.ctx, query, args...)
+		sqr, h.err = h.tx.Query(ctx, query, args...)
 	} else {
-		sqr, h.err = h.conn.Query(h.ctx, query, args...)
+		sqr, h.err = h.conn.Query(ctx, query, args...)
 	}
 	if h.err != nil {
 		h.err = fmt.Errorf("queryarray: %w", h.err)
@@ -686,10 +744,14 @@ func (h *PostgreSQLHelper) QueryRow(query string, args ...any) dhl.Row {
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	query = dhl.ReplaceQueryParamMarker(query, paramInSeq, placeholder)
 	query = dhl.InterpolateTable(query, schema)
+	ctx := h.ctx
+	if h.rCtx != nil {
+		ctx = h.rCtx
+	}
 	if h.tx != nil {
-		return h.tx.QueryRow(h.ctx, query, args...)
+		return h.tx.QueryRow(ctx, query, args...)
 	} else {
-		return h.conn.QueryRow(h.ctx, query, args...)
+		return h.conn.QueryRow(ctx, query, args...)
 	}
 }
 
@@ -724,8 +786,14 @@ func (h *PostgreSQLHelper) Exec(query string, args ...any) (int64, error) {
 	// replace question mark (?) parameter with configured query parameter, if there are any
 	query = dhl.ReplaceQueryParamMarker(query, paramInSeq, placeholder)
 	query = dhl.InterpolateTable(query, schema)
+
+	ctx := h.ctx
+	if h.rCtx != nil {
+		ctx = h.rCtx
+	}
+
 	if h.tx != nil {
-		ct, h.err = h.tx.Exec(h.ctx, query, args...)
+		ct, h.err = h.tx.Exec(ctx, query, args...)
 		if h.err != nil {
 			if !errors.Is(h.err, pgx.ErrTxClosed) {
 				h.err = fmt.Errorf("exec: %w", h.err)
@@ -736,7 +804,7 @@ func (h *PostgreSQLHelper) Exec(query string, args ...any) (int64, error) {
 		return ct.RowsAffected(), nil
 	}
 
-	ct, h.err = h.conn.Exec(h.ctx, query, args...)
+	ct, h.err = h.conn.Exec(ctx, query, args...)
 	if h.err != nil {
 		h.err = fmt.Errorf("exec: %w", h.err)
 		return 0, h.err
@@ -773,9 +841,14 @@ func (h *PostgreSQLHelper) Exists(queryWithParams string, args ...any) (bool, er
 		return false, errors.New(`semicolons are not allowed at the end of this query`)
 	}
 
+	ctx := h.ctx
+	if h.rCtx != nil {
+		ctx = h.rCtx
+	}
+
 	sqlq = `SELECT EXISTS (SELECT 1 FROM ` + queryWithParams + `);`
 	if h.tx != nil {
-		h.err = h.tx.QueryRow(h.ctx, sqlq, args...).Scan(&exists)
+		h.err = h.tx.QueryRow(ctx, sqlq, args...).Scan(&exists)
 		if h.err != nil {
 			if !errors.Is(h.err, dhl.ErrNoRows) {
 				h.err = fmt.Errorf("exists: %w", h.err)
@@ -786,7 +859,7 @@ func (h *PostgreSQLHelper) Exists(queryWithParams string, args ...any) (bool, er
 		return exists, h.err
 	}
 
-	h.err = h.conn.QueryRow(h.ctx, sqlq, args...).Scan(&exists)
+	h.err = h.conn.QueryRow(ctx, sqlq, args...).Scan(&exists)
 	if h.err != nil {
 		if !errors.Is(h.err, dhl.ErrNoRows) {
 			h.err = fmt.Errorf("exists: %w", h.err)
@@ -876,28 +949,33 @@ func (h *PostgreSQLHelper) Next(serial string, next *int64) error {
 			MAXVALUE 2147483647
 			CACHE 1;`, schema, sln)
 
+	ctx := h.ctx
+	if h.rCtx != nil {
+		ctx = h.rCtx
+	}
+
 	// Check if sequence exists, if not create it
 	// Get next value of the sequence
 	sqlq = fmt.Sprintf("SELECT nextval('%s');", h.Escape(schema+"."+sln))
 	if h.tx != nil {
-		_, h.err = h.tx.Exec(h.ctx, seq)
+		_, h.err = h.tx.Exec(ctx, seq)
 		if h.err != nil {
 			h.err = fmt.Errorf("next: %w", h.err)
 			return h.err
 		}
-		h.err = h.tx.QueryRow(h.ctx, sqlq).Scan(next)
+		h.err = h.tx.QueryRow(ctx, sqlq).Scan(next)
 		if h.err != nil {
 			h.err = fmt.Errorf("next: %w", h.err)
 			return h.err
 		}
 		return nil
 	}
-	_, h.err = h.conn.Exec(h.ctx, seq)
+	_, h.err = h.conn.Exec(ctx, seq)
 	if h.err != nil {
 		h.err = fmt.Errorf("next: %w", h.err)
 		return h.err
 	}
-	h.err = h.conn.QueryRow(h.ctx, sqlq).Scan(next)
+	h.err = h.conn.QueryRow(ctx, sqlq).Scan(next)
 	if h.err != nil {
 		h.err = fmt.Errorf("next: %w", h.err)
 		return h.err
@@ -1042,4 +1120,5 @@ func (h *PostgreSQLHelper) PoolSet() {
 // PoolUnset set the pool to unset
 func (h *PostgreSQLHelper) PoolUnset() {
 	h.poolAtInit = false
+	h.rCtx = nil
 }
