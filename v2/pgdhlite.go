@@ -12,9 +12,9 @@ import (
 
 	dhl "github.com/NarsilWorks-Inc/datahelperlite/v2"
 	dn "github.com/eaglebush/datainfo"
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // PostgreSQLHelper implements DataHelperLite
@@ -29,7 +29,7 @@ type PostgreSQLHelper struct {
 	rw  sync.RWMutex
 	err error
 	rollbackTriggered,
-	committed bool
+	committed, poolAtInit bool
 	trnIdMap  map[int8]bool
 	lastTrnId int8
 }
@@ -54,7 +54,6 @@ func (h *PostgreSQLHelper) Open(ctx context.Context, di *dn.DataInfo) error {
 	}
 
 	h.err = nil
-	h.dbi = di
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -67,7 +66,6 @@ func (h *PostgreSQLHelper) Open(ctx context.Context, di *dn.DataInfo) error {
 		h.err = fmt.Errorf("open: %w", h.err)
 		return h.err
 	}
-
 	if di.MaxOpenConnection != nil {
 		cfg.MaxConns = int32(*di.MaxOpenConnection)
 	}
@@ -77,9 +75,13 @@ func (h *PostgreSQLHelper) Open(ctx context.Context, di *dn.DataInfo) error {
 	if di.MaxConnectionIdleTime != nil {
 		cfg.MaxConnIdleTime = time.Duration(*di.MaxConnectionIdleTime)
 	}
-	h.conn, h.err = pgxpool.ConnectConfig(ctx, cfg)
+	h.conn, h.err = pgxpool.NewWithConfig(ctx, cfg)
 	if h.err != nil {
 		h.err = fmt.Errorf("open: %w", h.err)
+		return h.err
+	}
+	if h.conn == nil {
+		h.err = fmt.Errorf("open: failed to create pool")
 		return h.err
 	}
 	h.rw.Lock()
@@ -105,8 +107,14 @@ func (h *PostgreSQLHelper) Close() error {
 	if h.tx != nil {
 		h.Rollback()
 	}
+
+	if h.poolAtInit {
+		return nil
+	}
+
 	h.conn.Close()
 	h.conn = nil
+
 	h.rw.Lock()
 	h.trCnt = 0
 	h.err = nil
@@ -1019,4 +1027,14 @@ func (h *PostgreSQLHelper) NowUTC() *time.Time {
 		return &tm
 	}
 	return &tm
+}
+
+// Ping sends data packets to check pool connection
+func (h *PostgreSQLHelper) Ping() error {
+	return h.conn.Ping(h.ctx)
+}
+
+// PoolSet indicates that the helper was set externally
+func (h *PostgreSQLHelper) PoolSet() {
+	h.poolAtInit = true
 }

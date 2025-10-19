@@ -1,7 +1,7 @@
 package pgdhlite
 
 import (
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 )
 
 // PostgreSQLRow struct
