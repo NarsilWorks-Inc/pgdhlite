@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.24.2
 
 require (
-	github.com/NarsilWorks-Inc/datahelperlite v0.1.5
+	github.com/NarsilWorks-Inc/datahelperlite v0.1.6
 	github.com/eaglebush/config v0.1.1
 	github.com/eaglebush/datainfo v0.1.0
 	github.com/jackc/pgx/v5 v5.7.6
