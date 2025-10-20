@@ -370,7 +370,7 @@ func TestWriteNestedWithTransactions(t *testing.T) {
 		}
 
 		// go to a function to reuse
-		func(dh *dhl.DataHelperLite) {
+		func(dh dhl.DataHelperLite) {
 
 			x, err := dhl.New(dh, `pgdhlite`)
 			if err != nil {
@@ -403,7 +403,7 @@ func TestWriteNestedWithTransactions(t *testing.T) {
 			}
 
 			x.Commit()
-		}(&c)
+		}(c)
 
 		i++
 	}
@@ -452,7 +452,7 @@ func TestWriteNested(t *testing.T) {
 		}
 
 		// go to a function to reuse
-		func(dh *dhl.DataHelperLite) {
+		func(dh dhl.DataHelperLite) {
 
 			x, err := dhl.New(dh, `pgdhlite`)
 			if err != nil {
@@ -481,7 +481,7 @@ func TestWriteNested(t *testing.T) {
 				t.Log(err.Error())
 				t.Fail()
 			}
-		}(&c)
+		}(c)
 
 		i++
 	}
