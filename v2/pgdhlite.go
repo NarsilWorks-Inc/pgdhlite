@@ -30,7 +30,7 @@ type PostgreSQLHelper struct {
 	rw  sync.RWMutex
 	err error
 	rollbackTriggered,
-	committed, poolAtInit bool
+	committed bool
 	trnIdMap  map[int8]bool
 	lastTrnId int8
 }
@@ -95,18 +95,6 @@ func (h *PostgreSQLHelper) Open(ctx context.Context, di *dn.DataInfo) error {
 	return nil
 }
 
-// Acquire sets all queries to a new context from pool.
-//
-// It will return an error if the current connection is not pooled.
-func (h *PostgreSQLHelper) Acquire(ctx context.Context) error {
-	if !h.poolAtInit {
-		h.err = fmt.Errorf("acquire: opened connection is not from pool")
-		return h.err
-	}
-	h.rCtx = ctx
-	return nil
-}
-
 // Close PostgreSQLHelper
 func (h *PostgreSQLHelper) Close() error {
 	if h.conn == nil {
@@ -123,10 +111,6 @@ func (h *PostgreSQLHelper) Close() error {
 	// check if transaction exists
 	if h.tx != nil {
 		h.Rollback()
-	}
-
-	if h.poolAtInit {
-		return nil
 	}
 
 	h.conn.Close()
@@ -1110,20 +1094,4 @@ func (h *PostgreSQLHelper) NowUTC() *time.Time {
 // Ping sends data packets to check pool connection
 func (h *PostgreSQLHelper) Ping() error {
 	return h.conn.Ping(h.ctx)
-}
-
-// Pooled indicates that the helper was set externally or pooled
-func (h *PostgreSQLHelper) Pooled() bool {
-	return h.poolAtInit
-}
-
-// PoolSet sets the state that the helper was set externally or being pooled
-func (h *PostgreSQLHelper) PoolSet() {
-	h.poolAtInit = true
-}
-
-// PoolUnset set the pool to unset
-func (h *PostgreSQLHelper) PoolUnset() {
-	h.poolAtInit = false
-	h.rCtx = nil
 }
