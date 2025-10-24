@@ -17,7 +17,7 @@ import (
 
 // PostgreSQLHelper implements DataHelperLite
 type PostgreSQLHelper struct {
-	hndl       dhl.DataHelperHandler
+	hndl       dhl.DataHelperHandle
 	ctx        context.Context
 	tx         *sql.Tx
 	rws        dhl.Rows
@@ -37,12 +37,12 @@ func init() {
 }
 
 // NewHelper instantiates new helper
-func (h *PostgreSQLHelper) NewHelper() dhl.DataHelperLiter {
+func (h *PostgreSQLHelper) NewHelper() dhl.DataHelperLite {
 	return &PostgreSQLHelper{}
 }
 
 // Acquire sets all queries to a new context from pool.
-func (dh *PostgreSQLHelper) Acquire(ctx context.Context, h dhl.DataHelperHandler) error {
+func (dh *PostgreSQLHelper) Acquire(ctx context.Context, h dhl.DataHelperHandle) error {
 	dh.rw.Lock()
 	defer dh.rw.Unlock()
 	if ctx == nil {

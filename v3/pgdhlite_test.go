@@ -496,7 +496,7 @@ func TestWriteNestedWithTransactions(t *testing.T) {
 		secure = !secure
 
 		// go to a function to reuse
-		func(dh dhl.DataHelperLiter) {
+		func(dh dhl.DataHelperLite) {
 			c.Begin()
 
 			_, err = c.Exec(`
@@ -588,7 +588,7 @@ func TestWriteNested(t *testing.T) {
 		secure = !secure
 
 		// go to a function to reuse
-		func(dh dhl.DataHelperLiter) {
+		func(dh dhl.DataHelperLite) {
 			_, err = c.Exec(`
 			INSERT INTO public.master_table (
 				pk, code, name, count,
