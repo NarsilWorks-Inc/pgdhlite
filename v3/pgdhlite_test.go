@@ -61,7 +61,12 @@ func TestGetRows(t *testing.T) {
 	)
 
 	// Initialize datahelper handler
-	hndl := DataHelperHandle{}
+	hndl, err := dhl.NewHandle(`pgdhlite`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
 	if err = hndl.Open(di); err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -78,7 +83,7 @@ func TestGetRows(t *testing.T) {
 	}
 
 	// Acquire handle and context
-	err = c.Acquire(context.Background(), &hndl)
+	err = c.Acquire(context.Background(), hndl)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -165,7 +170,7 @@ func TestGetRow(t *testing.T) {
 	)
 
 	// Initialize datahelper handler
-	hndl := DataHelperHandle{}
+	hndl, err := dhl.NewHandle(`pgdhlite`)
 	if err = hndl.Open(di); err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -182,7 +187,7 @@ func TestGetRow(t *testing.T) {
 	}
 
 	// Acquire handle and context
-	err = c.Acquire(context.Background(), &hndl)
+	err = c.Acquire(context.Background(), hndl)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -243,7 +248,7 @@ func TestExists(t *testing.T) {
 	)
 
 	// Initialize datahelper handler
-	hndl := DataHelperHandle{}
+	hndl, err := dhl.NewHandle(`pgdhlite`)
 	if err = hndl.Open(di); err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -260,7 +265,7 @@ func TestExists(t *testing.T) {
 	}
 
 	// Acquire handle and context
-	err = c.Acquire(context.Background(), &hndl)
+	err = c.Acquire(context.Background(), hndl)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -302,7 +307,7 @@ func TestQueryArray(t *testing.T) {
 	)
 
 	// Initialize datahelper handler
-	hndl := DataHelperHandle{}
+	hndl, err := dhl.NewHandle(`pgdhlite`)
 	if err = hndl.Open(di); err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -319,7 +324,7 @@ func TestQueryArray(t *testing.T) {
 	}
 
 	// Acquire handle and context
-	err = c.Acquire(context.Background(), &hndl)
+	err = c.Acquire(context.Background(), hndl)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -364,7 +369,7 @@ func TestWriteTransactions(t *testing.T) {
 	)
 
 	// Initialize datahelper handler
-	hndl := DataHelperHandle{}
+	hndl, err := dhl.NewHandle(`pgdhlite`)
 	if err = hndl.Open(di); err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -381,7 +386,7 @@ func TestWriteTransactions(t *testing.T) {
 	}
 
 	// Acquire handle and context
-	err = c.Acquire(context.Background(), &hndl)
+	err = c.Acquire(context.Background(), hndl)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -452,7 +457,7 @@ func TestWriteNestedWithTransactions(t *testing.T) {
 	)
 
 	// Initialize datahelper handler
-	hndl := DataHelperHandle{}
+	hndl, err := dhl.NewHandle(`pgdhlite`)
 	if err = hndl.Open(di); err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -469,7 +474,7 @@ func TestWriteNestedWithTransactions(t *testing.T) {
 	}
 
 	// Acquire handle and context
-	err = c.Acquire(context.Background(), &hndl)
+	err = c.Acquire(context.Background(), hndl)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -546,7 +551,7 @@ func TestWriteNested(t *testing.T) {
 	)
 
 	// Initialize datahelper handler
-	hndl := DataHelperHandle{}
+	hndl, err := dhl.NewHandle(`pgdhlite`)
 	if err = hndl.Open(di); err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -563,7 +568,7 @@ func TestWriteNested(t *testing.T) {
 	}
 
 	// Acquire handle and context
-	err = c.Acquire(context.Background(), &hndl)
+	err = c.Acquire(context.Background(), hndl)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -632,7 +637,7 @@ func TestSequence(t *testing.T) {
 	)
 
 	// Initialize datahelper handler
-	hndl := DataHelperHandle{}
+	hndl, err := dhl.NewHandle(`pgdhlite`)
 	if err = hndl.Open(di); err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -649,7 +654,7 @@ func TestSequence(t *testing.T) {
 	}
 
 	// Acquire handle and context
-	err = c.Acquire(context.Background(), &hndl)
+	err = c.Acquire(context.Background(), hndl)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -685,7 +690,7 @@ func TestUint8AndUInt16(t *testing.T) {
 	)
 
 	// Initialize datahelper handler
-	hndl := DataHelperHandle{}
+	hndl, err := dhl.NewHandle(`pgdhlite`)
 	if err = hndl.Open(di); err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -702,7 +707,7 @@ func TestUint8AndUInt16(t *testing.T) {
 	}
 
 	// Acquire handle and context
-	err = c.Acquire(context.Background(), &hndl)
+	err = c.Acquire(context.Background(), hndl)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -749,7 +754,7 @@ func TestFloat32(t *testing.T) {
 	)
 
 	// Initialize datahelper handler
-	hndl := DataHelperHandle{}
+	hndl, err := dhl.NewHandle(`pgdhlite`)
 	if err = hndl.Open(di); err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -766,7 +771,7 @@ func TestFloat32(t *testing.T) {
 	}
 
 	// Acquire handle and context
-	err = c.Acquire(context.Background(), &hndl)
+	err = c.Acquire(context.Background(), hndl)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
