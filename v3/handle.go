@@ -53,6 +53,12 @@ func (dh *Handle) Open(di *dn.DataInfo) error {
 	if di.MaxConnectionIdleTime != nil {
 		cfg.MaxConnIdleTime = time.Duration(*di.MaxConnectionIdleTime)
 	}
+	// Added to handle sql.Open panic
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Recovered from DB panic: %v", r)
+		}
+	}()
 	dh.pool, dh.err = pgxpool.NewWithConfig(context.Background(), cfg)
 	if dh.err != nil {
 		dh.err = fmt.Errorf("open: %w", dh.err)
@@ -64,7 +70,10 @@ func (dh *Handle) Open(di *dn.DataInfo) error {
 	}
 	dh.db = stdlib.OpenDBFromPool(dh.pool)
 	dh.dbi = di
-	if err := dh.db.PingContext(context.Background()); err != nil {
+	// Use a timeout for ping
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := dh.db.PingContext(ctx); err != nil {
 		dh.err = fmt.Errorf("open: %w", err)
 		return dh.err
 	}
@@ -76,7 +85,9 @@ func (h *Handle) Ping() error {
 	if h.db == nil {
 		return fmt.Errorf("ping: %s to use", dhl.ErrHandleNoHandle)
 	}
-	if err := h.db.PingContext(context.Background()); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := h.db.PingContext(ctx); err != nil {
 		h.err = fmt.Errorf("ping: %w", err)
 		return h.err
 	}
