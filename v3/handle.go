@@ -74,6 +74,8 @@ func (dh *Handle) Open(di *dn.DataInfo) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := dh.db.PingContext(ctx); err != nil {
+		// A failed ping should empty the db because this is the Open method
+		dh.db = nil
 		dh.err = fmt.Errorf("open: %w", err)
 		return dh.err
 	}
