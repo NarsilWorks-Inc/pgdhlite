@@ -54,7 +54,7 @@ func (dh *PostgreSQLHelper) Acquire(ctx context.Context, h dhl.DataHelperHandle)
 }
 
 // Begin a transaction. If there is an existing transaction, begin is ignored
-func (dh *PostgreSQLHelper) Begin() error {
+func (dh *PostgreSQLHelper) Begin() (err error) {
 	dh.rw.Lock()
 	defer dh.rw.Unlock()
 	if dh.err != nil {
@@ -68,8 +68,8 @@ func (dh *PostgreSQLHelper) Begin() error {
 		dh.err = errors.New("begin: cannot mix Begin() with BeginManually() in the same transaction")
 		return dh.err
 	}
+	defer handlePanic(&err)
 	if dh.tx == nil {
-		var err error
 		dh.tx, err = dh.hndl.DB().BeginTx(dh.ctx, nil)
 		if err != nil {
 			dh.err = fmt.Errorf("begin: %w", err)
@@ -88,7 +88,7 @@ func (dh *PostgreSQLHelper) Begin() error {
 }
 
 // Begin a transaction to support deferred rollback.
-func (dh *PostgreSQLHelper) BeginManually() error {
+func (dh *PostgreSQLHelper) BeginManually() (err error) {
 	dh.rw.Lock()
 	defer dh.rw.Unlock()
 	if dh.err != nil {
@@ -102,8 +102,8 @@ func (dh *PostgreSQLHelper) BeginManually() error {
 		dh.err = errors.New("begin-manually: cannot mix BeginManually() with Begin() in the same transaction")
 		return dh.err
 	}
+	defer handlePanic(&err)
 	if dh.tx == nil {
-		var err error
 		dh.tx, err = dh.hndl.DB().BeginTx(dh.ctx, nil)
 		if err != nil {
 			dh.err = fmt.Errorf("begin-manually: %w", err)
@@ -120,7 +120,7 @@ func (dh *PostgreSQLHelper) BeginManually() error {
 }
 
 // Commit a transaction.
-func (dh *PostgreSQLHelper) Commit() error {
+func (dh *PostgreSQLHelper) Commit() (err error) {
 	dh.rw.RLock()
 	tx, trCnt, committed, rb, herr, hndl, manualCnt := dh.tx, dh.trCnt, dh.committed, dh.rollbackTriggered, dh.err, dh.hndl, dh.manualCnt
 	dh.rw.RUnlock()
@@ -146,9 +146,11 @@ func (dh *PostgreSQLHelper) Commit() error {
 			dh.rw.Unlock()
 			return nil
 		}
+		defer handlePanic(&err)
+
 		// outermost manual: real commit
 		dh.finalizeMu.Lock()
-		err := tx.Commit()
+		err = tx.Commit()
 		dh.finalizeMu.Unlock()
 		if err != nil && !errors.Is(err, sql.ErrTxDone) {
 			dh.setDHErr(fmt.Errorf("commit: %w", err))
@@ -190,10 +192,11 @@ func (dh *PostgreSQLHelper) Commit() error {
 		return dh.err
 	}
 
+	defer handlePanic(&err)
 	// Serialize finalization
 	// Commit the outermost transaction
 	dh.finalizeMu.Lock()
-	err := tx.Commit()
+	err = tx.Commit()
 	dh.finalizeMu.Unlock()
 	if err != nil && !errors.Is(err, sql.ErrTxDone) {
 		dh.setDHErr(fmt.Errorf("commit: %w", err))
@@ -215,7 +218,7 @@ func (dh *PostgreSQLHelper) Commit() error {
 }
 
 // Rollback a transaction.
-func (dh *PostgreSQLHelper) Rollback() error {
+func (dh *PostgreSQLHelper) Rollback() (err error) {
 	dh.rw.RLock()
 	tx, trCnt, manualCnt, committed, herr := dh.tx, dh.trCnt, dh.manualCnt, dh.committed, dh.err
 	dh.rw.RUnlock()
@@ -270,7 +273,7 @@ func (dh *PostgreSQLHelper) Rollback() error {
 	return dh.rollbk()
 }
 
-func (dh *PostgreSQLHelper) rollbk() error {
+func (dh *PostgreSQLHelper) rollbk() (err error) {
 	dh.rw.RLock()
 	tx, hndl := dh.tx, dh.hndl
 	dh.rw.RUnlock()
@@ -282,9 +285,10 @@ func (dh *PostgreSQLHelper) rollbk() error {
 	dh.rollbackTriggered = true // 🔧 Mark rollback occurred
 	dh.rw.Unlock()
 
+	defer handlePanic(&err)
 	// serialize finalization
 	dh.finalizeMu.Lock()
-	err := tx.Rollback()
+	err = tx.Rollback()
 	dh.finalizeMu.Unlock()
 	if err != nil && !errors.Is(err, sql.ErrTxDone) {
 		dh.setDHErr(fmt.Errorf("rollbk: %w", err))
@@ -304,7 +308,7 @@ func (dh *PostgreSQLHelper) rollbk() error {
 }
 
 // Mark a savepoint
-func (dh *PostgreSQLHelper) Mark(name string) error {
+func (dh *PostgreSQLHelper) Mark(name string) (err error) {
 	dh.rw.RLock()
 	tx, herr, trCnt, hndl := dh.tx, dh.err, dh.trCnt, dh.hndl
 	dh.rw.RUnlock()
@@ -322,7 +326,9 @@ func (dh *PostgreSQLHelper) Mark(name string) error {
 	}
 
 	if trCnt > 0 {
-		_, err := tx.ExecContext(dh.ctx, `SAVEPOINT sp_`+sanitizeName(name)+`;`)
+		defer handlePanic(&err)
+
+		_, err = tx.ExecContext(dh.ctx, `SAVEPOINT sp_`+sanitizeName(name)+`;`)
 		if err != nil {
 			dh.setDHErr(fmt.Errorf("mark: %w", err))
 			return dh.err
@@ -333,7 +339,7 @@ func (dh *PostgreSQLHelper) Mark(name string) error {
 }
 
 // Discard a savepoint
-func (dh *PostgreSQLHelper) Discard(name string) error {
+func (dh *PostgreSQLHelper) Discard(name string) (err error) {
 	dh.rw.RLock()
 	tx, herr, trCnt, hndl := dh.tx, dh.err, dh.trCnt, dh.hndl
 	dh.rw.RUnlock()
@@ -350,7 +356,9 @@ func (dh *PostgreSQLHelper) Discard(name string) error {
 	}
 
 	if trCnt > 0 {
-		_, err := tx.ExecContext(dh.ctx, `ROLLBACK TO SAVEPOINT sp_`+sanitizeName(name)+`;`)
+		defer handlePanic(&err)
+
+		_, err = tx.ExecContext(dh.ctx, `ROLLBACK TO SAVEPOINT sp_`+sanitizeName(name)+`;`)
 		if err != nil {
 			dh.setDHErr(fmt.Errorf("discard: %w", err))
 			return dh.err
@@ -360,7 +368,7 @@ func (dh *PostgreSQLHelper) Discard(name string) error {
 }
 
 // Save a savepoint
-func (dh *PostgreSQLHelper) Save(name string) error {
+func (dh *PostgreSQLHelper) Save(name string) (err error) {
 	dh.rw.RLock()
 	tx, herr, hndl := dh.tx, dh.err, dh.hndl
 	dh.rw.RUnlock()
@@ -376,7 +384,9 @@ func (dh *PostgreSQLHelper) Save(name string) error {
 		return dh.err
 	}
 	if dh.trCnt > 0 {
-		_, err := tx.ExecContext(dh.ctx, `RELEASE SAVEPOINT sp_`+sanitizeName(name)+`;`)
+		defer handlePanic(&err)
+
+		_, err = tx.ExecContext(dh.ctx, `RELEASE SAVEPOINT sp_`+sanitizeName(name)+`;`)
 		if err != nil {
 			dh.setDHErr(fmt.Errorf("save: %w", err))
 			return dh.err
@@ -386,7 +396,7 @@ func (dh *PostgreSQLHelper) Save(name string) error {
 }
 
 // Query from PostgreSQL helper
-func (dh *PostgreSQLHelper) Query(querySql string, args ...any) (dhl.Rows, error) {
+func (dh *PostgreSQLHelper) Query(querySql string, args ...any) (rows dhl.Rows, err error) {
 	dh.rw.RLock()
 	tx, herr, hndl := dh.tx, dh.err, dh.hndl
 	dh.rw.RUnlock()
@@ -406,10 +416,9 @@ func (dh *PostgreSQLHelper) Query(querySql string, args ...any) (dhl.Rows, error
 	querySql = dhl.ReplaceQueryParamMarker(querySql, paramInSeq, placeholder)
 	querySql = dhl.InterpolateTable(querySql, schema)
 
-	var (
-		sqr *sql.Rows
-		err error
-	)
+	defer handlePanic(&err)
+
+	var sqr *sql.Rows
 	if tx != nil {
 		sqr, err = tx.QueryContext(dh.ctx, querySql, args...)
 	} else {
@@ -425,7 +434,7 @@ func (dh *PostgreSQLHelper) Query(querySql string, args ...any) (dhl.Rows, error
 }
 
 // QueryArray puts the single column result to an output array
-func (dh *PostgreSQLHelper) QueryArray(querySql string, out any, args ...any) error {
+func (dh *PostgreSQLHelper) QueryArray(querySql string, out any, args ...any) (err error) {
 	dh.rw.RLock()
 	tx, herr, hndl := dh.tx, dh.err, dh.hndl
 	dh.rw.RUnlock()
@@ -451,10 +460,10 @@ func (dh *PostgreSQLHelper) QueryArray(querySql string, out any, args ...any) er
 	// Replace tables meant for interpolation {table} for putting the schema
 	querySql = dhl.ReplaceQueryParamMarker(querySql, paramInSeq, placeholder)
 	querySql = dhl.InterpolateTable(querySql, schema)
-	var (
-		sqr *sql.Rows
-		err error
-	)
+
+	defer handlePanic(&err)
+
+	var sqr *sql.Rows
 	if tx != nil {
 		sqr, err = tx.QueryContext(dh.ctx, querySql, args...)
 	} else {
@@ -630,6 +639,7 @@ func (dh *PostgreSQLHelper) QueryRow(querySql string, args ...any) dhl.Row {
 	querySql = dhl.ReplaceQueryParamMarker(querySql, paramInSeq, placeholder)
 	querySql = dhl.InterpolateTable(querySql, schema)
 
+	defer handlePanic(nil)
 	if tx != nil {
 		return tx.QueryRowContext(dh.ctx, querySql, args...)
 	} else {
@@ -638,7 +648,7 @@ func (dh *PostgreSQLHelper) QueryRow(querySql string, args ...any) dhl.Row {
 }
 
 // Exec from PostgreSQL helper
-func (dh *PostgreSQLHelper) Exec(querySql string, args ...any) (int64, error) {
+func (dh *PostgreSQLHelper) Exec(querySql string, args ...any) (ra int64, err error) {
 	dh.rw.RLock()
 	tx, herr, hndl := dh.tx, dh.err, dh.hndl
 	dh.rw.RUnlock()
@@ -657,10 +667,9 @@ func (dh *PostgreSQLHelper) Exec(querySql string, args ...any) (int64, error) {
 	querySql = dhl.ReplaceQueryParamMarker(querySql, paramInSeq, placeholder)
 	querySql = dhl.InterpolateTable(querySql, schema)
 
-	var (
-		sqr sql.Result
-		err error
-	)
+	defer handlePanic(&err)
+
+	var sqr sql.Result
 	if tx != nil {
 		sqr, err = tx.ExecContext(dh.ctx, querySql, args...)
 	} else {
@@ -670,13 +679,13 @@ func (dh *PostgreSQLHelper) Exec(querySql string, args ...any) (int64, error) {
 		dh.setDHErr(fmt.Errorf("exec: %w", err))
 		return 0, dh.err
 	}
-	ra, _ := sqr.RowsAffected()
+	ra, _ = sqr.RowsAffected()
 
 	return ra, nil
 }
 
 // Exists checks if a record exist
-func (dh *PostgreSQLHelper) Exists(sqlWithParams string, args ...any) (bool, error) {
+func (dh *PostgreSQLHelper) Exists(sqlWithParams string, args ...any) (exists bool, err error) {
 	dh.rw.RLock()
 	tx, herr, hndl := dh.tx, dh.err, dh.hndl
 	dh.rw.RUnlock()
@@ -701,15 +710,16 @@ func (dh *PostgreSQLHelper) Exists(sqlWithParams string, args ...any) (bool, err
 	}
 
 	var b strings.Builder
-	b.Grow(len(sqlWithParams) + 20)
+	b.Grow(len(sqlWithParams) + 100)
 	b.WriteString("SELECT EXISTS (SELECT 1 FROM ")
 	b.WriteString(sqlWithParams)
 	b.WriteString(`);`)
 	sqlq := b.String()
 
-	var exists bool
+	defer handlePanic(&err)
+
 	if tx != nil {
-		err := tx.QueryRowContext(dh.ctx, sqlq, args...).Scan(&exists)
+		err = tx.QueryRowContext(dh.ctx, sqlq, args...).Scan(&exists)
 		if err != nil {
 			if !errors.Is(err, dhl.ErrNoRows) {
 				dh.setDHErr(fmt.Errorf("exists: %w", err))
@@ -718,7 +728,7 @@ func (dh *PostgreSQLHelper) Exists(sqlWithParams string, args ...any) (bool, err
 		}
 		return exists, nil
 	}
-	err := hndl.DB().QueryRowContext(dh.ctx, sqlq, args...).Scan(&exists)
+	err = hndl.DB().QueryRowContext(dh.ctx, sqlq, args...).Scan(&exists)
 	if err != nil {
 		if !errors.Is(err, dhl.ErrNoRows) {
 			dh.setDHErr(fmt.Errorf("exists: %w", err))
@@ -729,7 +739,7 @@ func (dh *PostgreSQLHelper) Exists(sqlWithParams string, args ...any) (bool, err
 }
 
 // Next gets the next serial number
-func (dh *PostgreSQLHelper) Next(serial string, next *int64) error {
+func (dh *PostgreSQLHelper) Next(serial string, next *int64) (err error) {
 	dh.rw.RLock()
 	tx, herr, hndl := dh.tx, dh.err, dh.hndl
 	dh.rw.RUnlock()
@@ -758,6 +768,8 @@ func (dh *PostgreSQLHelper) Next(serial string, next *int64) error {
 		schema = *di.Schema
 	}
 
+	defer handlePanic(&err)
+
 	// if the database config has set a sequence generator, this will use it
 	sg := di.SequenceGenerator
 	if sg != nil {
@@ -777,7 +789,6 @@ func (dh *PostgreSQLHelper) Next(serial string, next *int64) error {
 		// It is optional when all queries are set in the result query.
 		// affr (affected rows) must be at least 1 to proceed
 		affr := int64(1)
-		var err error
 		if sg.UpsertQuery != "" {
 			var sqr sql.Result
 			sqlq := dhl.InterpolateTable(strings.ReplaceAll(sg.UpsertQuery, sg.NamePlaceHolder, serial), schema)
@@ -833,7 +844,7 @@ func (dh *PostgreSQLHelper) Next(serial string, next *int64) error {
 		}
 		return hndl.DB().QueryRowContext(dh.ctx, sqlq).Scan(next)
 	}
-	if err := scan(); err == nil {
+	if err = scan(); err == nil {
 		return nil
 	} else {
 		var sqlErr *pgconn.PgError
@@ -863,7 +874,7 @@ func (dh *PostgreSQLHelper) Next(serial string, next *int64) error {
 }
 
 // ExistsExt a set of validation expression against the underlying database table
-func (dh *PostgreSQLHelper) ExistsExt(tableName string, values []dhl.ColumnFilter) (Valid bool, Error error) {
+func (dh *PostgreSQLHelper) ExistsExt(tableName string, values []dhl.ColumnFilter) (exists bool, err error) {
 	dh.rw.RLock()
 	herr, hndl := dh.err, dh.hndl
 	dh.rw.RUnlock()
@@ -878,8 +889,7 @@ func (dh *PostgreSQLHelper) ExistsExt(tableName string, values []dhl.ColumnFilte
 	var (
 		andstr, sqlq,
 		ph string
-		exists bool
-		i      int
+		i int
 	)
 
 	args := make([]any, 0)
@@ -917,7 +927,7 @@ func (dh *PostgreSQLHelper) ExistsExt(tableName string, values []dhl.ColumnFilte
 	}
 
 	sqlq = dhl.InterpolateTable(`SELECT EXISTS (SELECT 1 FROM `+tableNameWithParameters+`);`, schema)
-	err := dh.QueryRow(sqlq, args...).Scan(&exists)
+	err = dh.QueryRow(sqlq, args...).Scan(&exists)
 	if err != nil {
 		if !errors.Is(err, dhl.ErrNoRows) {
 			dh.rw.Lock()
@@ -977,12 +987,15 @@ func (h *PostgreSQLHelper) NowUTC() *time.Time {
 }
 
 // Ping sends data packets to check pool connection
-func (dh *PostgreSQLHelper) Ping() error {
+func (dh *PostgreSQLHelper) Ping() (err error) {
 	dh.rw.RLock()
 	hndl, ctx := dh.hndl, dh.ctx
 	dh.rw.RUnlock()
+	defer handlePanic(&err)
+
 	if hndl == nil {
-		dh.setDHErr(fmt.Errorf("ping: %w", dhl.ErrHandleNotSet))
+		err = fmt.Errorf("ping: %w", dhl.ErrHandleNotSet)
+		dh.setDHErr(err)
 		return dh.err
 	}
 	return hndl.DB().PingContext(ctx)
