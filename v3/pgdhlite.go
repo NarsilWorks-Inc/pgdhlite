@@ -20,7 +20,6 @@ type PostgreSQLHelper struct {
 	hndl       dhl.DataHelperHandle
 	ctx        context.Context
 	tx         *sql.Tx
-	rws        dhl.Rows
 	trCnt      uint16
 	rw         sync.RWMutex
 	finalizeMu sync.Mutex
@@ -429,8 +428,7 @@ func (dh *PostgreSQLHelper) Query(querySql string, args ...any) (rows dhl.Rows, 
 		return nil, dh.err
 	}
 
-	dh.rws = NewPostgreSQLRows(sqr)
-	return dh.rws, dh.err
+	return NewPostgreSQLRows(sqr), dh.err
 }
 
 // QueryArray puts the single column result to an output array
@@ -931,7 +929,7 @@ func (dh *PostgreSQLHelper) ExistsExt(tableName string, values []dhl.ColumnFilte
 	if err != nil {
 		if !errors.Is(err, dhl.ErrNoRows) {
 			dh.rw.Lock()
-			dh.err = fmt.Errorf("existsext: %w", err)
+			dh.setDHErr(fmt.Errorf("existsext: %w", err))
 			dh.rw.Unlock()
 			return false, dh.err
 		}
@@ -951,13 +949,10 @@ func (h *PostgreSQLHelper) Escape(fv string) string {
 
 // DatabaseVersion returns database version
 func (h *PostgreSQLHelper) DatabaseVersion() string {
-	var (
-		version string
-	)
-	h.err = h.QueryRow(`SELECT version();`).Scan(&version)
-	if h.err != nil {
-		version = h.err.Error()
-		h.err = nil
+	var version string
+	err := h.QueryRow(`SELECT version();`).Scan(&version)
+	if err != nil {
+		return err.Error()
 	}
 	return version
 }
@@ -965,10 +960,9 @@ func (h *PostgreSQLHelper) DatabaseVersion() string {
 // Now gets the current server date
 func (h *PostgreSQLHelper) Now() *time.Time {
 	var tm time.Time
-	h.err = h.QueryRow(`SELECT NOW();`).Scan(&tm)
-	if h.err != nil {
+	err := h.QueryRow(`SELECT NOW();`).Scan(&tm)
+	if err != nil {
 		tm = time.Now()
-		h.err = nil
 		return &tm
 	}
 	return &tm
@@ -977,10 +971,9 @@ func (h *PostgreSQLHelper) Now() *time.Time {
 // NowUTC gets the current server date in UTC
 func (h *PostgreSQLHelper) NowUTC() *time.Time {
 	var tm time.Time
-	h.err = h.QueryRow(`SELECT timezone('UTC',CURRENT_TIMESTAMP);`).Scan(&tm)
-	if h.err != nil {
+	err := h.QueryRow(`SELECT timezone('UTC',CURRENT_TIMESTAMP);`).Scan(&tm)
+	if err != nil {
 		tm = time.Now().UTC()
-		h.err = nil
 		return &tm
 	}
 	return &tm

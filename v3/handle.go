@@ -28,7 +28,7 @@ func init() {
 }
 
 // Open connects to the database and initializes it
-func (dh *Handle) Open(di *dn.DataInfo) error {
+func (dh *Handle) Open(di *dn.DataInfo) (err error) {
 	if di == nil {
 		return fmt.Errorf("open: no data info set")
 	}
@@ -36,9 +36,9 @@ func (dh *Handle) Open(di *dn.DataInfo) error {
 		return fmt.Errorf("open: no data connection string set")
 	}
 	var cfg *pgxpool.Config
-	cfg, dh.err = pgxpool.ParseConfig(*di.ConnectionString)
-	if dh.err != nil {
-		dh.err = fmt.Errorf("open: %w", dh.err)
+	cfg, err = pgxpool.ParseConfig(*di.ConnectionString)
+	if err != nil {
+		dh.err = fmt.Errorf("open: %w", err)
 		return dh.err
 	}
 	if di.MaxOpenConnection != nil {
@@ -54,18 +54,16 @@ func (dh *Handle) Open(di *dn.DataInfo) error {
 		cfg.MaxConnIdleTime = time.Duration(*di.MaxConnectionIdleTime)
 	}
 	// Added to handle sql.Open panic
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Printf("Recovered from DB panic: %v", r)
-		}
-	}()
-	dh.pool, dh.err = pgxpool.NewWithConfig(context.Background(), cfg)
-	if dh.err != nil {
-		dh.err = fmt.Errorf("open: %w", dh.err)
+	handlePanic(&err)
+
+	dh.pool, err = pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		dh.err = fmt.Errorf("open: %w", err)
 		return dh.err
 	}
 	if dh.pool == nil {
-		dh.err = fmt.Errorf("open: failed to create pool")
+		err = fmt.Errorf("open: failed to create pool")
+		dh.err = err
 		return dh.err
 	}
 	dh.db = stdlib.OpenDBFromPool(dh.pool)
@@ -73,7 +71,7 @@ func (dh *Handle) Open(di *dn.DataInfo) error {
 	// Use a timeout for ping
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := dh.db.PingContext(ctx); err != nil {
+	if err = dh.db.PingContext(ctx); err != nil {
 		// A failed ping should empty the db because this is the Open method
 		dh.db = nil
 		dh.err = fmt.Errorf("open: %w", err)
@@ -83,13 +81,14 @@ func (dh *Handle) Open(di *dn.DataInfo) error {
 }
 
 // Ping tests the database connection
-func (h *Handle) Ping() error {
+func (h *Handle) Ping() (err error) {
 	if h.db == nil {
 		return fmt.Errorf("ping: %s to use", dhl.ErrHandleNoHandle)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := h.db.PingContext(ctx); err != nil {
+	handlePanic(&err)
+	if err = h.db.PingContext(ctx); err != nil {
 		h.err = fmt.Errorf("ping: %w", err)
 		return h.err
 	}
@@ -107,11 +106,12 @@ func (h *Handle) DI() *dn.DataInfo {
 }
 
 // Close the database connection
-func (h *Handle) Close() error {
+func (h *Handle) Close() (err error) {
 	if h.db == nil {
 		return fmt.Errorf("ping: %s to close", dhl.ErrHandleNoHandle)
 	}
-	if h.err = h.db.Close(); h.err != nil {
+	if err = h.db.Close(); err != nil {
+		h.err = err
 		return h.err
 	}
 	h.db = nil
