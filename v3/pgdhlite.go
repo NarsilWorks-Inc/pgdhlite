@@ -63,13 +63,18 @@ func (dh *PostgreSQLHelper) Begin() (err error) {
 		dh.err = fmt.Errorf("begin: %w", dhl.ErrHandleNotSet)
 		return dh.err
 	}
+	db := dh.hndl.DB()
+	if db == nil {
+		dh.err = fmt.Errorf("begin: %w", dhl.ErrHandleDBNotSet)
+		return dh.err
+	}
 	if dh.manualCnt > 0 {
 		dh.err = errors.New("begin: cannot mix Begin() with BeginManually() in the same transaction")
 		return dh.err
 	}
 	defer handlePanic(&err)
 	if dh.tx == nil {
-		dh.tx, err = dh.hndl.DB().BeginTx(dh.ctx, nil)
+		dh.tx, err = db.BeginTx(dh.ctx, nil)
 		if err != nil {
 			dh.err = fmt.Errorf("begin: %w", err)
 			return dh.err
@@ -97,13 +102,18 @@ func (dh *PostgreSQLHelper) BeginManually() (err error) {
 		dh.err = fmt.Errorf("begin-manually: %w", dhl.ErrHandleNotSet)
 		return dh.err
 	}
+	db := dh.hndl.DB()
+	if db == nil {
+		dh.err = fmt.Errorf("begin-manually: %w", dhl.ErrHandleDBNotSet)
+		return dh.err
+	}
 	if dh.trCnt > 0 || len(dh.frames) > 0 {
 		dh.err = errors.New("begin-manually: cannot mix BeginManually() with Begin() in the same transaction")
 		return dh.err
 	}
 	defer handlePanic(&err)
 	if dh.tx == nil {
-		dh.tx, err = dh.hndl.DB().BeginTx(dh.ctx, nil)
+		dh.tx, err = db.BeginTx(dh.ctx, nil)
 		if err != nil {
 			dh.err = fmt.Errorf("begin-manually: %w", err)
 			return dh.err
@@ -134,6 +144,10 @@ func (dh *PostgreSQLHelper) Commit() (err error) {
 	if manualCnt > 0 {
 		if hndl == nil {
 			dh.setDHErr(fmt.Errorf("commit: %w", dhl.ErrHandleNotSet))
+			return dh.err
+		}
+		if db := hndl.DB(); db == nil {
+			dh.setDHErr(fmt.Errorf("commit: %w", dhl.ErrHandleDBNotSet))
 			return dh.err
 		}
 		if manualCnt > 1 {
@@ -188,6 +202,10 @@ func (dh *PostgreSQLHelper) Commit() (err error) {
 	// Ensure DB, connection, and transaction are valid before committing
 	if hndl == nil {
 		dh.setDHErr(fmt.Errorf("commit: %w", dhl.ErrHandleNotSet))
+		return dh.err
+	}
+	if db := hndl.DB(); db == nil {
+		dh.setDHErr(fmt.Errorf("commit: %w", dhl.ErrHandleDBNotSet))
 		return dh.err
 	}
 
@@ -280,6 +298,10 @@ func (dh *PostgreSQLHelper) rollbk() (err error) {
 		dh.setDHErr(fmt.Errorf("rollbk: %w", dhl.ErrHandleNotSet))
 		return dh.err
 	}
+	if db := hndl.DB(); db == nil {
+		dh.setDHErr(fmt.Errorf("rollbk: %w", dhl.ErrHandleDBNotSet))
+		return dh.err
+	}
 	dh.rw.Lock()
 	dh.rollbackTriggered = true // 🔧 Mark rollback occurred
 	dh.rw.Unlock()
@@ -323,6 +345,10 @@ func (dh *PostgreSQLHelper) Mark(name string) (err error) {
 		dh.setDHErr(fmt.Errorf("mark: %w", dhl.ErrHandleNotSet))
 		return dh.err
 	}
+	if db := hndl.DB(); db == nil {
+		dh.setDHErr(fmt.Errorf("mark: %w", dhl.ErrHandleDBNotSet))
+		return dh.err
+	}
 
 	if trCnt > 0 {
 		defer handlePanic(&err)
@@ -351,6 +377,10 @@ func (dh *PostgreSQLHelper) Discard(name string) (err error) {
 	}
 	if hndl == nil {
 		dh.setDHErr(fmt.Errorf("discard: %w", dhl.ErrHandleNotSet))
+		return dh.err
+	}
+	if db := hndl; db == nil {
+		dh.setDHErr(fmt.Errorf("discard: %w", dhl.ErrHandleDBNotSet))
 		return dh.err
 	}
 
@@ -382,6 +412,10 @@ func (dh *PostgreSQLHelper) Save(name string) (err error) {
 		dh.setDHErr(fmt.Errorf("save: %w", dhl.ErrHandleNotSet))
 		return dh.err
 	}
+	if db := hndl.DB(); db == nil {
+		dh.setDHErr(fmt.Errorf("save: %w", dhl.ErrHandleDBNotSet))
+		return dh.err
+	}
 	if dh.trCnt > 0 {
 		defer handlePanic(&err)
 
@@ -407,6 +441,11 @@ func (dh *PostgreSQLHelper) Query(querySql string, args ...any) (rows dhl.Rows, 
 		dh.setDHErr(fmt.Errorf("query: %w", dhl.ErrHandleNotSet))
 		return nil, dh.err
 	}
+	db := hndl.DB()
+	if db == nil {
+		dh.setDHErr(fmt.Errorf("query: %w", dhl.ErrHandleDBNotSet))
+		return nil, dh.err
+	}
 
 	placeholder, paramInSeq, schema := dh.getParamDataInfo()
 
@@ -421,7 +460,7 @@ func (dh *PostgreSQLHelper) Query(querySql string, args ...any) (rows dhl.Rows, 
 	if tx != nil {
 		sqr, err = tx.QueryContext(dh.ctx, querySql, args...)
 	} else {
-		sqr, err = hndl.DB().QueryContext(dh.ctx, querySql, args...)
+		sqr, err = db.QueryContext(dh.ctx, querySql, args...)
 	}
 	if err != nil {
 		dh.setDHErr(fmt.Errorf("query: %w", err))
@@ -445,6 +484,12 @@ func (dh *PostgreSQLHelper) QueryArray(querySql string, out any, args ...any) (e
 		return dh.err
 	}
 
+	db := hndl.DB()
+	if db == nil {
+		dh.setDHErr(fmt.Errorf("queryarray: %w", dhl.ErrHandleDBNotSet))
+		return dh.err
+	}
+
 	placeholder, paramInSeq, schema := dh.getParamDataInfo()
 	switch out.(type) {
 	case *[]string, *[]int, *[]int8, *[]int16, *[]int32, *[]int64, *[]bool, *[]float32, *[]float64:
@@ -465,7 +510,7 @@ func (dh *PostgreSQLHelper) QueryArray(querySql string, out any, args ...any) (e
 	if tx != nil {
 		sqr, err = tx.QueryContext(dh.ctx, querySql, args...)
 	} else {
-		sqr, err = hndl.DB().QueryContext(dh.ctx, querySql, args...)
+		sqr, err = db.QueryContext(dh.ctx, querySql, args...)
 	}
 	if err != nil {
 		dh.setDHErr(fmt.Errorf("queryarray: %w", err))
@@ -631,6 +676,12 @@ func (dh *PostgreSQLHelper) QueryRow(querySql string, args ...any) dhl.Row {
 		dh.setDHErr(fmt.Errorf("queryrow: %w", dhl.ErrHandleNotSet))
 		return NewPostgreSQLRow(nil)
 	}
+
+	db := hndl.DB()
+	if db == nil {
+		dh.setDHErr(fmt.Errorf("queryrow: %w", dhl.ErrHandleDBNotSet))
+		return NewPostgreSQLRow(nil)
+	}
 	placeholder, paramInSeq, schema := dh.getParamDataInfo()
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
@@ -641,7 +692,7 @@ func (dh *PostgreSQLHelper) QueryRow(querySql string, args ...any) dhl.Row {
 	if tx != nil {
 		return tx.QueryRowContext(dh.ctx, querySql, args...)
 	} else {
-		return hndl.DB().QueryRowContext(dh.ctx, querySql, args...)
+		return db.QueryRowContext(dh.ctx, querySql, args...)
 	}
 }
 
@@ -659,6 +710,12 @@ func (dh *PostgreSQLHelper) Exec(querySql string, args ...any) (ra int64, err er
 		return 0, dh.err
 	}
 
+	db := hndl.DB()
+	if db == nil {
+		dh.setDHErr(fmt.Errorf("exec: %w", dhl.ErrHandleDBNotSet))
+		return 0, dh.err
+	}
+
 	placeholder, paramInSeq, schema := dh.getParamDataInfo()
 
 	// replace question mark (?) parameter with configured query parameter, if there are any
@@ -671,7 +728,7 @@ func (dh *PostgreSQLHelper) Exec(querySql string, args ...any) (ra int64, err er
 	if tx != nil {
 		sqr, err = tx.ExecContext(dh.ctx, querySql, args...)
 	} else {
-		sqr, err = hndl.DB().ExecContext(dh.ctx, querySql, args...)
+		sqr, err = db.ExecContext(dh.ctx, querySql, args...)
 	}
 	if err != nil {
 		dh.setDHErr(fmt.Errorf("exec: %w", err))
@@ -693,6 +750,12 @@ func (dh *PostgreSQLHelper) Exists(sqlWithParams string, args ...any) (exists bo
 
 	if hndl == nil {
 		dh.setDHErr(fmt.Errorf("exists: %w", dhl.ErrHandleNotSet))
+		return false, dh.err
+	}
+
+	db := hndl.DB()
+	if db == nil {
+		dh.setDHErr(fmt.Errorf("exists: %w", dhl.ErrHandleDBNotSet))
 		return false, dh.err
 	}
 
@@ -726,7 +789,7 @@ func (dh *PostgreSQLHelper) Exists(sqlWithParams string, args ...any) (exists bo
 		}
 		return exists, nil
 	}
-	err = hndl.DB().QueryRowContext(dh.ctx, sqlq, args...).Scan(&exists)
+	err = db.QueryRowContext(dh.ctx, sqlq, args...).Scan(&exists)
 	if err != nil {
 		if !errors.Is(err, dhl.ErrNoRows) {
 			dh.setDHErr(fmt.Errorf("exists: %w", err))
@@ -747,6 +810,12 @@ func (dh *PostgreSQLHelper) Next(serial string, next *int64) (err error) {
 
 	if hndl == nil {
 		dh.setDHErr(fmt.Errorf("next: %w", dhl.ErrHandleNotSet))
+		return dh.err
+	}
+
+	db := hndl.DB()
+	if db == nil {
+		dh.setDHErr(fmt.Errorf("next: %w", dhl.ErrHandleDBNotSet))
 		return dh.err
 	}
 
@@ -793,7 +862,7 @@ func (dh *PostgreSQLHelper) Next(serial string, next *int64) (err error) {
 			if tx != nil {
 				sqr, err = tx.ExecContext(dh.ctx, sqlq)
 			} else {
-				sqr, err = hndl.DB().ExecContext(dh.ctx, sqlq)
+				sqr, err = db.ExecContext(dh.ctx, sqlq)
 			}
 			if err != nil {
 				dh.setDHErr(fmt.Errorf("next: %w", err))
@@ -811,7 +880,7 @@ func (dh *PostgreSQLHelper) Next(serial string, next *int64) (err error) {
 		if tx != nil {
 			err = tx.QueryRowContext(dh.ctx, sqlq).Scan(next)
 		} else {
-			err = hndl.DB().QueryRowContext(dh.ctx, sqlq).Scan(next)
+			err = db.QueryRowContext(dh.ctx, sqlq).Scan(next)
 		}
 		if err != nil {
 			dh.setDHErr(fmt.Errorf("next: %w", err))
@@ -840,7 +909,7 @@ func (dh *PostgreSQLHelper) Next(serial string, next *int64) (err error) {
 		if tx != nil {
 			return tx.QueryRowContext(dh.ctx, sqlq).Scan(next)
 		}
-		return hndl.DB().QueryRowContext(dh.ctx, sqlq).Scan(next)
+		return db.QueryRowContext(dh.ctx, sqlq).Scan(next)
 	}
 	if err = scan(); err == nil {
 		return nil
@@ -861,7 +930,7 @@ func (dh *PostgreSQLHelper) Next(serial string, next *int64) (err error) {
 					return fmt.Errorf("next: %w", err2)
 				}
 			} else {
-				if _, err2 := hndl.DB().ExecContext(dh.ctx, ddl); err2 != nil {
+				if _, err2 := db.ExecContext(dh.ctx, ddl); err2 != nil {
 					return fmt.Errorf("next: %w", err2)
 				}
 			}
@@ -881,6 +950,11 @@ func (dh *PostgreSQLHelper) ExistsExt(tableName string, values []dhl.ColumnFilte
 	}
 	if hndl == nil {
 		dh.setDHErr(fmt.Errorf("existsext: %w", dhl.ErrHandleNotSet))
+		return false, dh.err
+	}
+
+	if db := hndl.DB(); db == nil {
+		dh.setDHErr(fmt.Errorf("existsext: %w", dhl.ErrHandleDBNotSet))
 		return false, dh.err
 	}
 
@@ -991,7 +1065,14 @@ func (dh *PostgreSQLHelper) Ping() (err error) {
 		dh.setDHErr(err)
 		return dh.err
 	}
-	return hndl.DB().PingContext(ctx)
+
+	db := hndl.DB()
+	if db == nil {
+		err = fmt.Errorf("ping: %w", dhl.ErrHandleDBNotSet)
+		dh.setDHErr(err)
+		return dh.err
+	}
+	return db.PingContext(ctx)
 }
 
 func (dh *PostgreSQLHelper) getParamDataInfo() (ph string, pis bool, sch string) {
