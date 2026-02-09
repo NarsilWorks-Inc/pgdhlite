@@ -379,7 +379,7 @@ func (dh *PostgreSQLHelper) Discard(name string) (err error) {
 		dh.setDHErr(fmt.Errorf("discard: %w", dhl.ErrHandleNotSet))
 		return dh.err
 	}
-	if db := hndl; db == nil {
+	if db := hndl.DB(); db == nil {
 		dh.setDHErr(fmt.Errorf("discard: %w", dhl.ErrHandleDBNotSet))
 		return dh.err
 	}
