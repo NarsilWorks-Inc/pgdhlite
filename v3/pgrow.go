@@ -18,9 +18,7 @@ func NewPostgreSQLRow(sqlr pgx.Row) PostgreSQLRow {
 
 // Scan to destination variables
 func (ss PostgreSQLRow) Scan(dest ...any) error {
-
 	destq := prepareDest(dest)
-
 	err := ss.sqr.Scan(destq...)
 	if err != nil {
 		return err

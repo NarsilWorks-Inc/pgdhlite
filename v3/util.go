@@ -154,9 +154,28 @@ func copyScannedToDest(dest, src []any) error {
 			case *string:
 				*s = string(([]byte)(*x))
 			case **string:
-				**s = string(([]byte)(*x))
+				if x == nil || *x == nil {
+					*s = nil
+					break
+				}
+				str := string(*x)
+				if *s == nil {
+					*s = new(string)
+				}
+				**s = str
 			case *json.RawMessage:
 				*s = ([]byte)(*x)
+			case **json.RawMessage:
+				if x == nil || *x == nil {
+					*s = nil
+					break
+				}
+				b := append([]byte(nil), (*x)...)
+				rm := json.RawMessage(b)
+				if *s == nil {
+					*s = new(json.RawMessage)
+				}
+				**s = rm
 			case json.RawMessage:
 				s = ([]byte)(*x)
 			case any:

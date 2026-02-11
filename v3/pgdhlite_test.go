@@ -915,15 +915,37 @@ func TestJsonRawMessage(t *testing.T) {
 		//address     json.RawMessage
 	)
 
-	err = c.QueryRow(`SELECT metadata FROM org_nodes WHERE id=28;`).Scan(&metadataPtr)
+	// err = c.QueryRow(`SELECT metadata FROM org_nodes WHERE id=28;`).Scan(&metadataPtr)
+	// if err != nil {
+	// 	t.Log(err.Error())
+	// 	t.Fail()
+	// 	return
+	// }
+
+	// err = c.QueryRow(`SELECT metadata FROM org_nodes WHERE id=28;`).Scan(&metadata)
+	// if err != nil {
+	// 	t.Log(err.Error())
+	// 	t.Fail()
+	// 	return
+	// }
+
+	rows, err := c.Query(`SELECT metadata FROM org_nodes WHERE id=28;`)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
 		return
 	}
+	defer rows.Close()
 
-	err = c.QueryRow(`SELECT metadata FROM org_nodes WHERE id=28;`).Scan(&metadata)
-	if err != nil {
+	for rows.Next() {
+		if err = rows.Scan(&metadataPtr); err != nil {
+			t.Log(err.Error())
+			t.Fail()
+			return
+		}
+	}
+
+	if err = rows.Err(); err != nil {
 		t.Log(err.Error())
 		t.Fail()
 		return
