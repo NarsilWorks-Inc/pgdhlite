@@ -912,6 +912,7 @@ func TestJsonRawMessage(t *testing.T) {
 	var (
 		metadataPtr *json.RawMessage
 		metadata    json.RawMessage
+		//address     json.RawMessage
 	)
 
 	err = c.QueryRow(`SELECT metadata FROM org_nodes WHERE id=28;`).Scan(&metadataPtr)
@@ -927,6 +928,13 @@ func TestJsonRawMessage(t *testing.T) {
 		t.Fail()
 		return
 	}
+
+	// err = c.QueryRow(`SELECT address FROM locations WHERE node_id=27;`).Scan(&address)
+	// if err != nil {
+	// 	t.Log(err.Error())
+	// 	t.Fail()
+	// 	return
+	// }
 
 	t.Logf("Data: %v, %v", *metadataPtr, metadata)
 
