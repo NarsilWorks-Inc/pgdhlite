@@ -155,6 +155,10 @@ func copyScannedToDest(dest, src []any) error {
 				*s = string(([]byte)(*x))
 			case **string:
 				**s = string(([]byte)(*x))
+			case *json.RawMessage:
+				*s = ([]byte)(*x)
+			case json.RawMessage:
+				s = ([]byte)(*x)
 			case any:
 				xs := string(([]byte)(*x))
 				s = &xs

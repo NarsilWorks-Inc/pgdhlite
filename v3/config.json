@@ -16,6 +16,18 @@
             "StorageType": "SERVER",
             "GroupID": "DEFAULT",
             "UTCDateFunction":"timezone('utc'::text, CURRENT_TIMESTAMP)"
+        },
+        {
+            "ID" : "HAWKEYE",
+            "Schema": "public",
+            "ConnectionString" : "postgres://app:wTU69pYEXf4MGd5x@hawkeye.vdimdci.com.ph:5432/axiom?application_name=pgdhlite&search_path=public&connect_timeout=5",
+            "HelperID": "pgdhlite",
+            "DriverName" : "pgx",
+            "InterpolateTables": true,
+            "ParameterPlaceholder": "$",
+            "ParameterInSequence": true,
+            "StorageType": "SERVER",
+            "GroupID": "DEFAULT"
         }
     ]
 }

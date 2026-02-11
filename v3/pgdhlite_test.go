@@ -2,6 +2,7 @@ package pgdhlite
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -851,5 +852,82 @@ func TestFloat32(t *testing.T) {
 	}
 
 	t.Logf("QtyOrigin: %f", *money)
+
+}
+
+func TestJsonRawMessage(t *testing.T) {
+	// Load configuration
+	cf, err := cfg.Load(`config.json`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	// Initialize data info
+	cdi := cf.GetDatabaseInfo(`HAWKEYE`)
+	di := dn.New(
+		dn.ConnectionString(cdi.ConnectionString),
+		dn.ParameterPlaceHolder(cdi.ParameterPlaceholder),
+	)
+
+	// Initialize datahelper handler
+	hndl, err := dhl.NewHandle(`pgdhlite`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	if err = hndl.Open(di); err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+	defer hndl.Close()
+
+	// Create new datahelper lite
+	c, err := dhl.New(nil, `pgdhlite`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	// Acquire handle and context
+	err = c.Acquire(context.Background(), hndl)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	// _, err = c.Exec(create_string)
+	// if err != nil {
+	// 	t.Log(err.Error())
+	// 	t.Fail()
+	// 	return
+	// }
+
+	var (
+		metadataPtr *json.RawMessage
+		metadata    json.RawMessage
+	)
+
+	err = c.QueryRow(`SELECT metadata FROM org_nodes WHERE id=28;`).Scan(&metadataPtr)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	err = c.QueryRow(`SELECT metadata FROM org_nodes WHERE id=28;`).Scan(&metadata)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	t.Logf("Data: %v, %v", *metadataPtr, metadata)
 
 }
