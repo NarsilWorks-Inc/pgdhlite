@@ -41,6 +41,13 @@ func (dh *Handle) Open(di *dn.DataInfo) (err error) {
 		dh.err = fmt.Errorf("open: %w", err)
 		return dh.err
 	}
+	// Set defaults
+	cfg.MaxConns = 20
+	cfg.MinIdleConns = 2
+	cfg.MaxConnIdleTime = 2 * time.Minute
+	cfg.MaxConnLifetime = 30 * time.Minute
+	cfg.HealthCheckPeriod = 1 * time.Minute
+
 	if di.MaxOpenConnection != nil {
 		cfg.MaxConns = int32(*di.MaxOpenConnection)
 	}
@@ -53,6 +60,7 @@ func (dh *Handle) Open(di *dn.DataInfo) (err error) {
 	if di.MaxConnectionIdleTime != nil {
 		cfg.MaxConnIdleTime = time.Duration(*di.MaxConnectionIdleTime)
 	}
+
 	// Added to handle sql.Open panic
 	handlePanic(&err)
 
@@ -69,7 +77,7 @@ func (dh *Handle) Open(di *dn.DataInfo) (err error) {
 	dh.db = stdlib.OpenDBFromPool(dh.pool)
 	dh.dbi = di
 	// Use a timeout for ping
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err = dh.db.PingContext(ctx); err != nil {
 		// A failed ping should empty the db because this is the Open method
@@ -85,7 +93,7 @@ func (h *Handle) Ping() (err error) {
 	if h.db == nil {
 		return fmt.Errorf("ping: %s to use", dhl.ErrHandleNoHandle)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	handlePanic(&err)
 	if err = h.db.PingContext(ctx); err != nil {
