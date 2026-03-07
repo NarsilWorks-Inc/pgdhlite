@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.24.2
 
 require (
-	github.com/NarsilWorks-Inc/datahelperlite v0.1.23
+	github.com/NarsilWorks-Inc/datahelperlite v0.1.24
 	github.com/eaglebush/config v0.1.4
 	github.com/eaglebush/datainfo v0.1.0
 	github.com/jackc/pgx/v5 v5.8.0
@@ -25,5 +25,5 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgtype v1.14.4
 	golang.org/x/crypto v0.47.0 // indirect
-	golang.org/x/text v0.33.0 // indirect
+	golang.org/x/text v0.34.0 // indirect
 )

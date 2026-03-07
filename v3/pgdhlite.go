@@ -26,8 +26,14 @@ type PostgreSQLHelper struct {
 	err        error
 	rollbackTriggered,
 	committed bool
-	frames    []bool
-	manualCnt uint16 // manual-mode nesting
+	frames           []bool
+	manualCnt        uint16 // manual-mode nesting
+	vendorStatements []vendorStmt
+}
+
+type vendorStmt struct {
+	Key   string
+	Value string
 }
 
 func init() {
@@ -37,7 +43,9 @@ func init() {
 
 // NewHelper instantiates new helper
 func (h *PostgreSQLHelper) NewHelper() dhl.DataHelperLite {
-	return &PostgreSQLHelper{}
+	return &PostgreSQLHelper{
+		vendorStatements: []vendorStmt{},
+	}
 }
 
 // Acquire sets all queries to a new context from pool.
@@ -1073,6 +1081,16 @@ func (dh *PostgreSQLHelper) Ping() (err error) {
 		return dh.err
 	}
 	return db.PingContext(ctx)
+}
+
+// VendorStatement returns a vendor-specific statement or query when present. Returns an empty string if not present
+func (dh *PostgreSQLHelper) VendorStatement(key string) string {
+	return ""
+}
+
+// VendorStatements Lists the vendor-specific statements implemented in a helper
+func (dh *PostgreSQLHelper) VendorStatements() []string {
+	return []string{}
 }
 
 func (dh *PostgreSQLHelper) getParamDataInfo() (ph string, pis bool, sch string) {
