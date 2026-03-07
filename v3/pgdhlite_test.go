@@ -98,7 +98,7 @@ func TestGetRows(t *testing.T) {
 		return
 	}
 
-	rows, err := c.Query(`SELECT pk, code, name, count, secure, time_of_day, money, byte FROM public.master_table;`)
+	rows, err := c.Query(`SELECT pk, code, name, count, secure, time_of_day, money, byte FROM public.master_table WHERE count=-1;`)
 	if err != nil {
 		t.Log(err.Error())
 		t.Fail()
@@ -148,7 +148,7 @@ func TestGetRows(t *testing.T) {
 			pk, code, name, count, secure, time_of_day, money, bytev)
 	}
 
-	if rows.Err() != nil {
+	if err = rows.Err(); err != nil {
 		t.Log(err.Error())
 		return
 	}
@@ -218,7 +218,7 @@ func TestGetRow(t *testing.T) {
 
 	err = c.QueryRow(`
 		SELECT pk, code, name, count, secure, time_of_day, money, byte
-		FROM public.master_table;`).Scan(&pk,
+		FROM public.master_table WHERE count=-1;`).Scan(&pk,
 		&code,
 		&name,
 		&count,

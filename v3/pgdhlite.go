@@ -690,9 +690,9 @@ func (dh *PostgreSQLHelper) QueryRow(querySql string, args ...any) dhl.Row {
 
 	defer handlePanic(nil)
 	if tx != nil {
-		return tx.QueryRowContext(dh.ctx, querySql, args...)
+		return NewPostgreSQLRow(tx.QueryRowContext(dh.ctx, querySql, args...))
 	} else {
-		return db.QueryRowContext(dh.ctx, querySql, args...)
+		return NewPostgreSQLRow(db.QueryRowContext(dh.ctx, querySql, args...))
 	}
 }
 
