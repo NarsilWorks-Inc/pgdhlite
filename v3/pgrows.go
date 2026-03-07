@@ -2,8 +2,11 @@ package pgdhlite
 
 import (
 	"database/sql"
+	"errors"
 
 	"github.com/NarsilWorks-Inc/datahelperlite/v3"
+	dhl "github.com/NarsilWorks-Inc/datahelperlite/v3"
+	"github.com/jackc/pgx/v5"
 )
 
 // PostgreSQLRows struct
@@ -48,6 +51,9 @@ func (ss PostgreSQLRows) Scan(dest ...any) error {
 	destq := prepareDest(dest)
 	err := ss.sqr.Scan(destq...)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return dhl.ErrNoRows
+		}
 		return err
 	}
 

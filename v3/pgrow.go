@@ -1,6 +1,9 @@
 package pgdhlite
 
 import (
+	"errors"
+
+	dhl "github.com/NarsilWorks-Inc/datahelperlite/v3"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -21,6 +24,10 @@ func (ss PostgreSQLRow) Scan(dest ...any) error {
 	destq := prepareDest(dest)
 	err := ss.sqr.Scan(destq...)
 	if err != nil {
+		// Return a datahelper row if the error is ErrNoRows
+		if errors.Is(err, pgx.ErrNoRows) {
+			return dhl.ErrNoRows
+		}
 		return err
 	}
 
