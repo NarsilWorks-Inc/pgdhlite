@@ -51,9 +51,12 @@ func (dh *Handle) Open(di *dn.DataInfo) (err error) {
 	if di.MaxOpenConnection != nil {
 		cfg.MaxConns = int32(*di.MaxOpenConnection)
 	}
-	if di.MaxIdleConnection != nil {
-		cfg.MinIdleConns = int32(*di.MaxIdleConnection)
+
+	// Minimum idle connection should be 70% if the maximum connections allowed
+	if cfg.MaxConns > cfg.MinIdleConns {
+		cfg.MinIdleConns = int32(float64(cfg.MaxConns) * float64(0.70))
 	}
+
 	if di.MaxConnectionLifetime != nil {
 		cfg.MaxConnLifetime = time.Duration(*di.MaxConnectionLifetime)
 	}
