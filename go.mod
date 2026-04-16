@@ -3,7 +3,7 @@ module github.com/NarsilWorks-Inc/pgdhlite
 go 1.25.0
 
 require (
-	github.com/NarsilWorks-Inc/datahelperlite v0.1.29
+	github.com/NarsilWorks-Inc/datahelperlite v0.1.30
 	github.com/eaglebush/config v0.1.4
 	github.com/eaglebush/datainfo v0.1.0
 	github.com/jackc/pgx/v5 v5.9.1

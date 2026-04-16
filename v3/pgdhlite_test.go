@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS public.master_table
     time_of_day timestamp without time zone,
     money numeric(18,4),
 	byte smallint,
-    CONSTRAINT master_table_pkey PRIMARY KEY (pk)
+    CONSTRAINT master_table_pkey PRIMARY KEY (pk),
+	CONSTRAINT uix_code UNIQUE (code)
 );
 
 INSERT INTO public.master_table (pk, code, name, count, secure, time_of_day, money, byte) VALUES ('34VcMI5kdBG9uplzh8rb0NjBWIG', 'CODE1', 'Code Name 1', 100, true, '2025-10-24 18:32:01', 120.54, 1);
@@ -960,4 +961,84 @@ func TestJsonRawMessage(t *testing.T) {
 
 	t.Logf("Data: %v, %v", *metadataPtr, metadata)
 
+}
+
+func TestUpsertReturning(t *testing.T) {
+	// Load configuration
+	cf, err := cfg.Load(`config.json`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	// Initialize data info
+	cdi := cf.GetDatabaseInfo(`HAWKEYE`)
+	di := dn.New(
+		dn.ConnectionString(cdi.ConnectionString),
+		dn.ParameterPlaceHolder(cdi.ParameterPlaceholder),
+	)
+
+	// Initialize datahelper handler
+	hndl, err := dhl.NewHandle(`pgdhlite`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	if err = hndl.Open(di); err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+	defer hndl.Close()
+
+	// Create new datahelper lite
+	c, err := dhl.New(nil, `pgdhlite`)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	// Acquire handle and context
+	err = c.Acquire(context.Background(), hndl)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	_, err = c.Exec(create_string)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	var (
+		pk string
+	)
+
+	row, err := c.UpsertReturning(
+		"master_table",
+		[]string{"pk", "code", "name", "count"},
+		[]string{"code"},
+		[]string{"name"},
+		[]string{"pk"},
+		"34VcMHaZqclpxHUUWvsJIeQ1Rwu", "CODE2", "Code Name 2000", 200,
+	)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+	if err = row.Scan(&pk); err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
+
+	t.Logf("PK: %s", pk)
 }
