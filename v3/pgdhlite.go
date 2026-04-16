@@ -1141,6 +1141,7 @@ func (dh *PostgreSQLHelper) UpsertReturning(
 			for _, insCol := range insertColumns {
 				if strings.EqualFold(insCol, updCol) {
 					found = true
+					break
 				}
 			}
 			if !found {
