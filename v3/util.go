@@ -24,7 +24,9 @@ func copyScannedToDest(dest, src []any) error {
 				case **string:
 					*s = &x.String
 				default:
-					return errors.New(`unhandled sql.NullString type`)
+					if err := assignStringReflect(dest[i], x.String); err != nil {
+						return errors.New(`unhandled sql.NullString type`)
+					}
 				}
 			}
 		case *sql.NullByte:
@@ -234,7 +236,7 @@ func prepareDestReflect(d any) any {
 	}
 
 	t := rv.Type().Elem()
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 
@@ -252,7 +254,7 @@ func prepareDestReflect(d any) any {
 	case reflect.Bool:
 		return &sql.NullBool{}
 	case reflect.Struct:
-		if t == reflect.TypeOf(time.Time{}) {
+		if t == reflect.TypeFor[time.Time]() {
 			return &sql.NullTime{}
 		}
 	case reflect.Slice:
@@ -265,16 +267,40 @@ func prepareDestReflect(d any) any {
 	return nil
 }
 
+func assignStringReflect(dst any, s string) error {
+	rv := reflect.ValueOf(dst)
+	if !rv.IsValid() || rv.Kind() != reflect.Pointer || rv.IsNil() {
+		return fmt.Errorf("destination must be a non-nil pointer, got %T", dst)
+	}
+	return setStringReflect(rv.Elem(), s)
+}
+
+func setStringReflect(v reflect.Value, s string) error {
+	if v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			v.Set(reflect.New(v.Type().Elem()))
+		}
+		return setStringReflect(v.Elem(), s)
+	}
+
+	if v.Kind() != reflect.String {
+		return fmt.Errorf("cannot assign string to %v", v.Type())
+	}
+
+	v.SetString(s)
+	return nil
+}
+
 func assignInt16Reflect(dst any, n int16) error {
 	rv := reflect.ValueOf(dst)
-	if !rv.IsValid() || rv.Kind() != reflect.Ptr || rv.IsNil() {
+	if !rv.IsValid() || rv.Kind() != reflect.Pointer || rv.IsNil() {
 		return fmt.Errorf("destination must be a non-nil pointer, got %T", dst)
 	}
 	return setInt16Reflect(rv.Elem(), n)
 }
 
 func setInt16Reflect(v reflect.Value, n int16) error {
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			v.Set(reflect.New(v.Type().Elem()))
 		}
