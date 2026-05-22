@@ -1014,9 +1014,7 @@ func (dh *PostgreSQLHelper) ExistsExt(tableName string, values []dhl.ColumnFilte
 	err = dh.QueryRow(sqlq, args...).Scan(&exists)
 	if err != nil {
 		if !errors.Is(err, dhl.ErrNoRows) {
-			dh.rw.Lock()
 			dh.setDHErr(fmt.Errorf("existsext: %w", err))
-			dh.rw.Unlock()
 			return false, dh.err
 		}
 		return false, nil
