@@ -24,11 +24,14 @@ type Handle struct {
 }
 
 func init() {
-	dhl.SetHandler(`pgdhlite`, &Handle{})
+	dhl.SetHandler("pgdhlite", &Handle{})
 }
 
 // Open connects to the database and initializes it
 func (dh *Handle) Open(di *dn.DataInfo) (err error) {
+	if dh.pool != nil || dh.db != nil {
+		return fmt.Errorf("open: database already open")
+	}
 	if di == nil {
 		return fmt.Errorf("open: no data info set")
 	}
@@ -43,7 +46,8 @@ func (dh *Handle) Open(di *dn.DataInfo) (err error) {
 	}
 	// Set defaults
 	cfg.MaxConns = 20
-	cfg.MinIdleConns = 2
+	cfg.MinConns = 4
+	cfg.MinIdleConns = 4
 	cfg.MaxConnIdleTime = 2 * time.Minute
 	cfg.MaxConnLifetime = 30 * time.Minute
 	cfg.HealthCheckPeriod = 1 * time.Minute
@@ -54,7 +58,8 @@ func (dh *Handle) Open(di *dn.DataInfo) (err error) {
 
 	// Minimum idle connection should be 70% if the maximum connections allowed
 	if cfg.MaxConns > cfg.MinIdleConns {
-		cfg.MinIdleConns = int32(float64(cfg.MaxConns) * float64(0.70))
+		cfg.MinConns = int32(float64(cfg.MaxConns) * float64(0.20))
+		cfg.MinIdleConns = cfg.MinConns
 	}
 
 	if di.MaxConnectionLifetime != nil {
@@ -77,17 +82,25 @@ func (dh *Handle) Open(di *dn.DataInfo) (err error) {
 		dh.err = err
 		return dh.err
 	}
+
 	dh.db = stdlib.OpenDBFromPool(dh.pool)
 	dh.dbi = di
+
 	// Use a timeout for ping
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err = dh.db.PingContext(ctx); err != nil {
 		// A failed ping should empty the db because this is the Open method
+		_ = dh.db.Close()
 		dh.db = nil
+
+		dh.pool.Close()
+		dh.pool = nil
+
 		dh.err = fmt.Errorf("open: %w", err)
 		return dh.err
 	}
+
 	return nil
 }
 
@@ -118,15 +131,20 @@ func (h *Handle) DI() *dn.DataInfo {
 
 // Close the database connection
 func (h *Handle) Close() (err error) {
-	if h.db == nil {
-		return fmt.Errorf("ping: %s to close", dhl.ErrHandleNoHandle)
+	if h.db != nil {
+		err = h.db.Close()
+		h.db = nil
 	}
-	if err = h.db.Close(); err != nil {
+
+	if h.pool != nil {
+		h.pool.Close()
+		h.pool = nil
+	}
+
+	if err != nil {
 		h.err = err
-		return h.err
 	}
-	h.db = nil
-	h.pool.Close()
+
 	return nil
 }
 
