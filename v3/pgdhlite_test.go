@@ -57,10 +57,15 @@ func TestGetRows(t *testing.T) {
 
 	// Initialize data info
 	cdi := cf.GetDatabaseInfo(`DEFAULT`)
-	di := dn.New(
+	di, err := dn.New(
 		dn.ConnectionString(cdi.ConnectionString),
 		dn.ParameterPlaceHolder(cdi.ParameterPlaceholder),
 	)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
 
 	// Initialize datahelper handler
 	hndl, err := dhl.NewHandle(`pgdhlite`)
@@ -166,10 +171,15 @@ func TestGetRow(t *testing.T) {
 
 	// Initialize data info
 	cdi := cf.GetDatabaseInfo(`DEFAULT`)
-	di := dn.New(
+	di, err := dn.New(
 		dn.ConnectionString(cdi.ConnectionString),
 		dn.ParameterPlaceHolder(cdi.ParameterPlaceholder),
 	)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
 
 	// Initialize datahelper handler
 	hndl, err := dhl.NewHandle(`pgdhlite`)
@@ -250,10 +260,15 @@ func TestExists(t *testing.T) {
 
 	// Initialize data info
 	cdi := cf.GetDatabaseInfo(`DEFAULT`)
-	di := dn.New(
+	di, err := dn.New(
 		dn.ConnectionString(cdi.ConnectionString),
 		dn.ParameterPlaceHolder(cdi.ParameterPlaceholder),
 	)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
 
 	// Initialize datahelper handler
 	hndl, err := dhl.NewHandle(`pgdhlite`)
@@ -315,10 +330,15 @@ func TestQueryArray(t *testing.T) {
 
 	// Initialize data info
 	cdi := cf.GetDatabaseInfo(`DEFAULT`)
-	di := dn.New(
+	di, err := dn.New(
 		dn.ConnectionString(cdi.ConnectionString),
 		dn.ParameterPlaceHolder(cdi.ParameterPlaceholder),
 	)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
 
 	// Initialize datahelper handler
 	hndl, err := dhl.NewHandle(`pgdhlite`)
@@ -383,10 +403,15 @@ func TestWriteTransactions(t *testing.T) {
 
 	// Initialize data info
 	cdi := cf.GetDatabaseInfo(`DEFAULT`)
-	di := dn.New(
+	di, err := dn.New(
 		dn.ConnectionString(cdi.ConnectionString),
 		dn.ParameterPlaceHolder(cdi.ParameterPlaceholder),
 	)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
 
 	// Initialize datahelper handler
 	hndl, err := dhl.NewHandle(`pgdhlite`)
@@ -477,10 +502,15 @@ func TestWriteNestedWithTransactions(t *testing.T) {
 
 	// Initialize data info
 	cdi := cf.GetDatabaseInfo(`DEFAULT`)
-	di := dn.New(
+	di, err := dn.New(
 		dn.ConnectionString(cdi.ConnectionString),
 		dn.ParameterPlaceHolder(cdi.ParameterPlaceholder),
 	)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
 
 	// Initialize datahelper handler
 	hndl, err := dhl.NewHandle(`pgdhlite`)
@@ -577,10 +607,15 @@ func TestWriteNested(t *testing.T) {
 
 	// Initialize data info
 	cdi := cf.GetDatabaseInfo(`DEFAULT`)
-	di := dn.New(
+	di, err := dn.New(
 		dn.ConnectionString(cdi.ConnectionString),
 		dn.ParameterPlaceHolder(cdi.ParameterPlaceholder),
 	)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
 
 	// Initialize datahelper handler
 	hndl, err := dhl.NewHandle(`pgdhlite`)
@@ -669,10 +704,15 @@ func TestSequence(t *testing.T) {
 
 	// Initialize data info
 	cdi := cf.GetDatabaseInfo(`DEFAULT`)
-	di := dn.New(
+	di, err := dn.New(
 		dn.ConnectionString(cdi.ConnectionString),
 		dn.ParameterPlaceHolder(cdi.ParameterPlaceholder),
 	)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
 
 	// Initialize datahelper handler
 	hndl, err := dhl.NewHandle(`pgdhlite`)
@@ -728,10 +768,15 @@ func TestUint8AndUInt16(t *testing.T) {
 
 	// Initialize data info
 	cdi := cf.GetDatabaseInfo(`DEFAULT`)
-	di := dn.New(
+	di, err := dn.New(
 		dn.ConnectionString(cdi.ConnectionString),
 		dn.ParameterPlaceHolder(cdi.ParameterPlaceholder),
 	)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
 
 	// Initialize datahelper handler
 	hndl, err := dhl.NewHandle(`pgdhlite`)
@@ -798,10 +843,15 @@ func TestFloat32(t *testing.T) {
 
 	// Initialize data info
 	cdi := cf.GetDatabaseInfo(`DEFAULT`)
-	di := dn.New(
+	di, err := dn.New(
 		dn.ConnectionString(cdi.ConnectionString),
 		dn.ParameterPlaceHolder(cdi.ParameterPlaceholder),
 	)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
 
 	// Initialize datahelper handler
 	hndl, err := dhl.NewHandle(`pgdhlite`)
@@ -867,10 +917,15 @@ func TestJsonRawMessage(t *testing.T) {
 
 	// Initialize data info
 	cdi := cf.GetDatabaseInfo(`HAWKEYE`)
-	di := dn.New(
+	di, err := dn.New(
 		dn.ConnectionString(cdi.ConnectionString),
 		dn.ParameterPlaceHolder(cdi.ParameterPlaceholder),
 	)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
 
 	// Initialize datahelper handler
 	hndl, err := dhl.NewHandle(`pgdhlite`)
@@ -974,10 +1029,15 @@ func TestUpsertReturning(t *testing.T) {
 
 	// Initialize data info
 	cdi := cf.GetDatabaseInfo(`HAWKEYE`)
-	di := dn.New(
+	di, err := dn.New(
 		dn.ConnectionString(cdi.ConnectionString),
 		dn.ParameterPlaceHolder(cdi.ParameterPlaceholder),
 	)
+	if err != nil {
+		t.Log(err.Error())
+		t.Fail()
+		return
+	}
 
 	// Initialize datahelper handler
 	hndl, err := dhl.NewHandle(`pgdhlite`)
