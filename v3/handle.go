@@ -48,6 +48,10 @@ func (h *Handle) Open(di *dn.DataInfo) (err error) {
 	if err != nil {
 		return fmt.Errorf("open: %w", err)
 	}
+
+	// DataInfo will not be nil based on the checks
+	h.dbi = di
+
 	// Set defaults
 	cfg.MaxConns = 20
 	cfg.MinConns = 4
@@ -105,7 +109,6 @@ func (h *Handle) Open(di *dn.DataInfo) (err error) {
 
 	h.pool = pool
 	h.db = db
-	h.dbi = di
 
 	return nil
 }
