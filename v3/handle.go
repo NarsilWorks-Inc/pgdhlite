@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sync"
 	"time"
 
 	dhl "github.com/NarsilWorks-Inc/datahelperlite/v3"
@@ -19,8 +20,8 @@ import (
 type Handle struct {
 	db   *sql.DB
 	dbi  *dn.DataInfo
-	err  error
 	pool *pgxpool.Pool
+	mu   sync.RWMutex
 }
 
 func init() {
@@ -28,8 +29,11 @@ func init() {
 }
 
 // Open connects to the database and initializes it
-func (dh *Handle) Open(di *dn.DataInfo) (err error) {
-	if dh.pool != nil || dh.db != nil {
+func (h *Handle) Open(di *dn.DataInfo) (err error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.pool != nil || h.db != nil {
 		return fmt.Errorf("open: database already open")
 	}
 	if di == nil {
@@ -38,11 +42,11 @@ func (dh *Handle) Open(di *dn.DataInfo) (err error) {
 	if di.ConnectionString == nil {
 		return fmt.Errorf("open: no data connection string set")
 	}
+
 	var cfg *pgxpool.Config
 	cfg, err = pgxpool.ParseConfig(*di.ConnectionString)
 	if err != nil {
-		dh.err = fmt.Errorf("open: %w", err)
-		return dh.err
+		return fmt.Errorf("open: %w", err)
 	}
 	// Set defaults
 	cfg.MaxConns = 20
@@ -56,11 +60,14 @@ func (dh *Handle) Open(di *dn.DataInfo) (err error) {
 		cfg.MaxConns = int32(*di.MaxOpenConnection)
 	}
 
-	// Minimum idle connection should be 70% if the maximum connections allowed
-	if cfg.MaxConns > cfg.MinIdleConns {
-		cfg.MinConns = int32(float64(cfg.MaxConns) * float64(0.20))
-		cfg.MinIdleConns = cfg.MinConns
+	// Minimum idle connection should be 20% if the maximum connections allowed
+	minConns := int32(float64(cfg.MaxConns) * 0.20)
+	if minConns < 1 {
+		minConns = 1
 	}
+
+	cfg.MinConns = minConns
+	cfg.MinIdleConns = minConns
 
 	if di.MaxConnectionLifetime != nil {
 		cfg.MaxConnLifetime = time.Duration(*di.MaxConnectionLifetime)
@@ -70,67 +77,81 @@ func (dh *Handle) Open(di *dn.DataInfo) (err error) {
 	}
 
 	// Added to handle sql.Open panic
-	handlePanic(&err)
+	defer handlePanic(&err)
 
-	dh.pool, err = pgxpool.NewWithConfig(context.Background(), cfg)
+	var pool *pgxpool.Pool
+	pool, err = pgxpool.NewWithConfig(context.Background(), cfg)
 	if err != nil {
-		dh.err = fmt.Errorf("open: %w", err)
-		return dh.err
-	}
-	if dh.pool == nil {
-		err = fmt.Errorf("open: failed to create pool")
-		dh.err = err
-		return dh.err
+		return fmt.Errorf("open: %w", err)
 	}
 
-	dh.db = stdlib.OpenDBFromPool(dh.pool)
-	dh.dbi = di
+	if pool == nil {
+		return fmt.Errorf("open: failed to create pool")
+	}
+
+	db := stdlib.OpenDBFromPool(pool)
 
 	// Use a timeout for ping
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err = dh.db.PingContext(ctx); err != nil {
+
+	if err = db.PingContext(ctx); err != nil {
 		// A failed ping should empty the db because this is the Open method
-		_ = dh.db.Close()
-		dh.db = nil
+		_ = db.Close()
+		pool.Close()
 
-		dh.pool.Close()
-		dh.pool = nil
-
-		dh.err = fmt.Errorf("open: %w", err)
-		return dh.err
+		return fmt.Errorf("open: %w", err)
 	}
+
+	h.pool = pool
+	h.db = db
+	h.dbi = di
 
 	return nil
 }
 
 // Ping tests the database connection
 func (h *Handle) Ping() (err error) {
+	defer handlePanic(&err)
+
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
 	if h.db == nil {
 		return fmt.Errorf("ping: %s to use", dhl.ErrHandleNoHandle)
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	handlePanic(&err)
+
 	if err = h.db.PingContext(ctx); err != nil {
-		h.err = fmt.Errorf("ping: %w", err)
-		return h.err
+		return fmt.Errorf("ping: %w", err)
 	}
+
 	return nil
 }
 
 // DB returns the database handle
 func (h *Handle) DB() *sql.DB {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
 	return h.db
 }
 
 // DI returns the data info that configured the handle
 func (h *Handle) DI() *dn.DataInfo {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
 	return h.dbi
 }
 
 // Close the database connection
 func (h *Handle) Close() (err error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	if h.db != nil {
 		err = h.db.Close()
 		h.db = nil
@@ -142,13 +163,14 @@ func (h *Handle) Close() (err error) {
 	}
 
 	if err != nil {
-		h.err = err
+		return err
 	}
 
 	return nil
 }
 
 // Err returns the last error
+// Note: This will be removed later in the interface
 func (h *Handle) Err() error {
-	return h.err
+	return nil
 }
